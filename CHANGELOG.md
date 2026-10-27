@@ -9,6 +9,8 @@ Quy ước đặt phiên bản tuân theo [Semantic Versioning](https://semver.o
 ## [Unreleased]
 
 ### Added
+- M7 integration: Dashboard/Versions dùng dữ liệu thật, tìm project, trạng thái tải/lỗi/trống; import version qua browser probe có timeout và lineage/FPS ước tính do người dùng nhập.
+- Smoke test tạo project/import version qua UI và kiểm tra đầy đủ phím tắt, điều hướng version/comment, project isolation và workflow sau restart; thêm test project/version/store race conditions.
 - M6 Revision Package Export thật: chọn version/feedback, lọc status/priority, instructions, preview JSON/file sizes và tạo folder local chứa README.md, review.json, instructions.md, frames/, annotated/.
 - Bộ kiểm thử ExportService và smoke test Electron xác nhận export hai lần không ghi đè, ảnh/instructions đúng nội dung và package còn sau restart.
 - M5 SRC Library dùng dữ liệu thật: import nhiều file hoặc thư mục con, thumbnail JPEG, tìm/sắp xếp, grid/list và preview video/ảnh; giữ đường dẫn gốc, không copy footage.
@@ -20,10 +22,12 @@ Quy ước đặt phiên bản tuân theo [Semantic Versioning](https://semver.o
 - Kiểm thử ReviewService bằng SQLite: lưu/mở lại, cách ly phiên bản, validation, frame 0, ID sau xóa và cập nhật trạng thái.
 
 ### Changed
+- Ngừng seed project mẫu ở database mới (không xóa dữ liệu cũ), bỏ số liệu/ảnh/deadline giả và các controls/module chưa hoạt động. Project trùng tên có thư mục/DB riêng theo ULID.
 - Bỏ export giả và các tùy chọn AI/SRC/preferences/locked segments chưa triển khai. Nút xuất chỉ tạo dữ liệu local, không giả lập gửi agent.
 - Giao diện dành cho một người dùng local: bỏ hồ sơ tài khoản giả, nhóm/avatar/thêm thành viên, tên tác giả bình luận và thông báo giả; đổi chia sẻ thành xuất gói phản hồi. Không yêu cầu đăng nhập.
 
 ### Fixed
+- Giữ version ID xuyên suốt Versions → Review → Export; feedback Dashboard seek đúng timestamp. Chặn response thống kê/project cũ, dùng chung connection khi mở DB đồng thời và scope stats theo project_id, bao gồm unresolved PARTIAL/IN_PROGRESS và CRITICAL.
 - Kiểm tra attachment/version/selection/path khi xuất; chặn media thiếu hoặc symlink trỏ ngoài dự án. Staging + transaction dọn gói mới khi ghi lỗi, giữ nguyên các lần xuất trước.
 - Bỏ metadata SRC gán cứng 1080p/30fps/H.264 và các clip/AI score mẫu. File không giải mã được có cảnh báo, không dừng cả batch; nhập lại cùng path không tạo bản ghi trùng.
 - Player xử lý duration WebM ban đầu là Infinity bằng metadata đã import và lắng nghe `durationchange`, tránh timeline 0/seek về đầu.

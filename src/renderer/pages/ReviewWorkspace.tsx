@@ -5,6 +5,7 @@ import { useProjectStore } from '../stores/project.store'
 import { AnnotationCanvas } from '../components/review/AnnotationCanvas'
 import { DrawingToolbar } from '../components/review/DrawingToolbar'
 import { captureFrame } from '../lib/capture-frame'
+import { localFileUrl as fileUrl } from '../lib/source-media'
 
 const categories: Record<CommentCategory, string> = {
   SUBTITLE: 'Phụ đề', PACING: 'Nhịp dựng', AUDIO: 'Âm thanh', COLOR: 'Màu sắc',
@@ -24,12 +25,6 @@ function formatTime(seconds: number): string {
   return `${String(Math.floor(ms / 60000)).padStart(2, '0')}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}.${String(ms % 1000).padStart(3, '0')}`
 }
 
-function fileUrl(filePath: string): string {
-  const normalized = filePath.replace(/\\/g, '/')
-  return encodeURI(normalized.startsWith('//') ? `file:${normalized}` : `file:///${normalized.replace(/^\//, '')}`)
-    .replace(/#/g, '%23').replace(/\?/g, '%3F')
-}
-
 export const ReviewWorkspace: React.FC = () => {
   const project = useProjectStore((state) => state.activeProject)
   if (!project) return <div className="flex-1 p-8 text-slate-500">Chọn một dự án để bắt đầu duyệt video.</div>
@@ -38,6 +33,9 @@ export const ReviewWorkspace: React.FC = () => {
 
 function ProjectReview({ project }: { project: Project }): React.ReactElement {
   const setActiveTab = useProjectStore((state) => state.setActiveTab)
+  const selectVersion = useProjectStore((state) => state.selectVersion)
+  const initialVersionId = useProjectStore((state) => state.activeVersionId)
+  const initialCommentId = useProjectStore((state) => state.reviewCommentId)
   const [versions, setVersions] = useState<EditVersion[]>([])
   const [versionId, setVersionId] = useState('')
   const [loading, setLoading] = useState(true)
@@ -48,7 +46,9 @@ function ProjectReview({ project }: { project: Project }): React.ReactElement {
     window.api.listVersions(project.id).then((list: EditVersion[]) => {
       if (cancelled) return
       setVersions(list)
-      setVersionId(list[list.length - 1]?.id || '')
+      const chosen = list.find((version) => version.id === initialVersionId) || list[list.length - 1]
+      setVersionId(chosen?.id || '')
+      if (chosen && !initialVersionId) selectVersion(chosen.id)
     }).catch(() => { if (!cancelled) setError('Không thể tải phiên bản. Hãy mở lại màn hình Review.') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
@@ -57,10 +57,10 @@ function ProjectReview({ project }: { project: Project }): React.ReactElement {
   const version = versions.find((item) => item.id === versionId)
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#f8fafc] text-slate-800">
-      <header className="flex items-center justify-between gap-4 p-4 border-b border-slate-200 bg-white">
+      <header className="flex flex-wrap items-center justify-between gap-4 p-4 border-b border-slate-200 bg-white">
         <div><h1 className="font-bold text-lg">{project.name}</h1><p className="text-xs text-slate-500">Duyệt bản dựng · Phản hồi được lưu riêng theo phiên bản</p></div>
-        <div className="flex items-center gap-2">
-          <select aria-label="Phiên bản đang duyệt" className={inputClass} value={versionId} onChange={(event) => setVersionId(event.target.value)} disabled={!versions.length}>
+        <div className="flex flex-wrap items-center gap-2">
+          <select aria-label="Phiên bản đang duyệt" className="rounded-lg border border-slate-200 bg-white p-2 text-xs max-w-xs" value={versionId} onChange={(event) => { setVersionId(event.target.value); selectVersion(event.target.value) }} disabled={!versions.length}>
             {!versions.length && <option value="">Chưa có bản dựng</option>}
             {versions.map((item) => <option key={item.id} value={item.id}>V{item.versionNumber} — {item.name}</option>)}
           </select>
@@ -70,18 +70,20 @@ function ProjectReview({ project }: { project: Project }): React.ReactElement {
       </header>
       {loading ? <p role="status" className="p-8">Đang tải phiên bản...</p>
         : error ? <p role="alert" className="p-8 text-red-600">{error}</p>
-        : version ? <VersionReview key={version.id} project={project} version={version} />
+        : version ? <VersionReview key={version.id} project={project} version={version} initialCommentId={initialCommentId} />
         : <div className="flex-1 flex flex-col items-center justify-center gap-3 text-slate-500"><MessageSquare /><p>Nhập video trong mục Phiên bản để bắt đầu review.</p><button className={buttonClass} onClick={() => setActiveTab('versions')}>Đến Phiên bản</button></div>}
     </div>
   )
 }
 
-function VersionReview({ project, version }: { project: Project; version: EditVersion }): React.ReactElement {
+function VersionReview({ project, version, initialCommentId }: { project: Project; version: EditVersion; initialCommentId: string | null }): React.ReactElement {
   const refreshStats = useProjectStore((state) => state.refreshStats)
   const videoRef = useRef<HTMLVideoElement>(null)
   const textRef = useRef<HTMLTextAreaElement>(null)
   const mounted = useRef(true)
   const busy = useRef(false)
+  const initialSeekDone = useRef(false)
+  const pendingSeek = useRef<number | null>(null)
   const canvasRef = useRef<{ getAnnotatedBase64: () => string | null }>(null)
   const [comments, setComments] = useState<ReviewComment[]>([])
   const [loading, setLoading] = useState(true)
@@ -130,13 +132,30 @@ function VersionReview({ project, version }: { project: Project; version: EditVe
     return () => { mounted.current = false }
   }, [project.id, version.id])
 
+  useEffect(() => {
+    if (!initialCommentId || initialSeekDone.current || !ready || !videoRef.current) return
+    const comment = comments.find((item) => item.id === initialCommentId)
+    if (!comment) return
+    initialSeekDone.current = true
+    setSelectedId(comment.id)
+    videoRef.current.pause()
+    videoRef.current.currentTime = Math.max(0, Math.min(duration || comment.timestamp, comment.timestamp))
+  }, [initialCommentId, comments, ready, duration])
+
   const seek = (target: number) => {
     const video = videoRef.current
-    if (!video || !ready || draftTime !== null) return
+    if (!video || draftTime !== null) return
+    if (!ready) { pendingSeek.current = target; return }
     video.pause()
     video.currentTime = Math.max(0, Math.min(duration, target))
     setTime(video.currentTime)
   }
+
+  useEffect(() => {
+    if (!ready || pendingSeek.current === null || !videoRef.current) return
+    videoRef.current.currentTime = Math.max(0, Math.min(duration || pendingSeek.current, pendingSeek.current))
+    pendingSeek.current = null
+  }, [ready, duration])
 
   const togglePlay = () => {
     const video = videoRef.current

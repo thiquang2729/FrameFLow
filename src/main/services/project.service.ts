@@ -7,11 +7,12 @@ import { DatabaseManager } from '../database/db'
 
 export class ProjectService {
   private activeDatabases: Map<string, DatabaseManager> = new Map()
+  private databaseLoads = new Map<string, Promise<DatabaseManager>>()
   private appDataDir: string
   private registryFile: string
 
-  constructor() {
-    this.appDataDir = path.join(os.homedir(), '.frameflow')
+  constructor(registryDirectory = path.join(os.homedir(), '.frameflow')) {
+    this.appDataDir = registryDirectory
     this.registryFile = path.join(this.appDataDir, 'projects.json')
     if (!fs.existsSync(this.appDataDir)) {
       fs.mkdirSync(this.appDataDir, { recursive: true })
@@ -32,7 +33,9 @@ export class ProjectService {
   }
 
   private saveRegistry(projects: Project[]): void {
-    fs.writeFileSync(this.registryFile, JSON.stringify(projects, null, 2))
+    const temporary = `${this.registryFile}.tmp`
+    fs.writeFileSync(temporary, JSON.stringify(projects, null, 2))
+    fs.renameSync(temporary, this.registryFile)
   }
 
   public async getDb(projectId: string): Promise<DatabaseManager> {
@@ -40,23 +43,29 @@ export class ProjectService {
       return this.activeDatabases.get(projectId)!
     }
 
-    const projects = this.getProjects()
-    const proj = projects.find((p) => p.id === projectId)
-    if (!proj) {
-      throw new Error(`Project ${projectId} not found`)
-    }
-
-    const dbPath = path.join(proj.projectPath, 'project.db')
-    const db = new DatabaseManager(dbPath)
-    await db.init()
-    this.activeDatabases.set(projectId, db)
-    return db
+    const pending = this.databaseLoads.get(projectId)
+    if (pending) return pending
+    const loading = (async () => {
+      const proj = this.getProjects().find((project) => project.id === projectId)
+      if (!proj) throw new Error(`Project ${projectId} not found`)
+      const db = new DatabaseManager(path.join(proj.projectPath, 'project.db'))
+      await db.init()
+      this.activeDatabases.set(projectId, db)
+      return db
+    })()
+    this.databaseLoads.set(projectId, loading)
+    try { return await loading } finally { this.databaseLoads.delete(projectId) }
   }
 
   public async createProject(dto: CreateProjectDTO): Promise<Project> {
+    if (typeof dto.name !== 'string' || !dto.name.trim() || dto.name.length > 120) throw new Error('Tên dự án phải có từ 1 đến 120 ký tự.')
+    if (dto.targetDuration !== undefined && (!Number.isFinite(dto.targetDuration) || dto.targetDuration <= 0)) throw new Error('Thời lượng mục tiêu phải lớn hơn 0.')
     const id = ulid()
     const baseDir = dto.projectDir || path.join(os.homedir(), 'FrameFlowProjects')
-    const projectPath = path.join(baseDir, dto.name.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim())
+    if (!path.isAbsolute(baseDir)) throw new Error('Thư mục dự án phải là đường dẫn tuyệt đối.')
+    const folderName = dto.name.trim().normalize('NFKC').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/[. ]+$/, '').slice(0, 80) || 'Project'
+    // Separate IDs always own separate databases, even with the same display name.
+    const projectPath = path.join(baseDir, `${folderName}_${id}`)
 
     // 1. Create directory structure as specified in DOCX Table 15
     const subdirs = [
@@ -77,7 +86,7 @@ export class ProjectService {
     const now = new Date().toISOString()
     const project: Project = {
       id,
-      name: dto.name,
+      name: dto.name.trim(),
       description: dto.description || '',
       targetPlatform: dto.targetPlatform || 'TikTok',
       targetDuration: dto.targetDuration || 60,
@@ -128,13 +137,13 @@ export class ProjectService {
   public async getProjectStats(projectId: string): Promise<ProjectStats> {
     const db = await this.getDb(projectId)
 
-    const sourceRow = db.get<{ count: number }>(`SELECT COUNT(*) as count FROM source_assets`)
-    const versionRow = db.get<{ count: number }>(`SELECT COUNT(*) as count FROM edit_versions`)
+    const sourceRow = db.get<{ count: number }>(`SELECT COUNT(*) as count FROM source_assets WHERE project_id = ?`, [projectId])
+    const versionRow = db.get<{ count: number }>(`SELECT COUNT(*) as count FROM edit_versions WHERE project_id = ?`, [projectId])
     const openReviewRow = db.get<{ count: number }>(
-      `SELECT COUNT(*) as count FROM review_comments WHERE status = 'OPEN'`
+      `SELECT COUNT(*) as count FROM review_comments WHERE project_id = ? AND status IN ('OPEN', 'IN_PROGRESS', 'PARTIAL')`, [projectId]
     )
     const highPriorityRow = db.get<{ count: number }>(
-      `SELECT COUNT(*) as count FROM review_comments WHERE status = 'OPEN' AND priority = 'HIGH'`
+      `SELECT COUNT(*) as count FROM review_comments WHERE project_id = ? AND status IN ('OPEN', 'IN_PROGRESS', 'PARTIAL') AND priority IN ('HIGH', 'CRITICAL')`, [projectId]
     )
 
     return {

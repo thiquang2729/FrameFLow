@@ -674,7 +674,12 @@ FrameFlow/
 - **M6 đã triển khai trên `dev`:** màn hình Export không còn mock/simulate. Chọn source version thật, target label, bình luận theo status/priority, instructions tối đa 2.000 ký tự; preview file/byte count và review.json qua IPC. Mặc định không chọn FIXED/REJECTED nhưng có thể chọn thủ công; filter không tự bỏ các item đang được chọn.
 - Export gồm đúng `review.json`, `README.md`, `instructions.md`, `frames/`, `annotated/`. Context dự án nằm trong Markdown; JSON giữ source version ID, timestamp, frame ước tính, status và đường dẫn ảnh tương đối. Không giả lập gửi agent hay thêm SRC/preferences/locked segments chưa có chức năng.
 - Backend kiểm tra ownership/version/selection, path containment cả realpath/symlink, cảnh báo legacy comment không có frame và chặn ảnh có attachment record nhưng file thiếu. Preview read-only; tạo gói sẽ kiểm tra lại, build vào staging riêng rồi publish thư mục ULID và ghi DB transaction. Lỗi lưu dọn gói mới, không sửa gói cũ.
-- **Bước tiếp theo:** M7 — integration/polish và xử lý dữ liệu mẫu còn ở Dashboard/VersionList. Smoke test M4/M5/M6 trong Electron đã đạt như báo cáo dưới đây; filmstrip TASK-PLY-003, codec MP4/H.264 thực tế, thao tác fullscreen và video 4K thực tế vẫn chưa được kiểm thử đầy đủ. Chưa đánh dấu toàn bộ MVP Done.
+- **M6 đã commit:** `d2e20c2` trên `dev`; chưa merge vào `main`.
+- **M7 integration/polish đã triển khai:** Dashboard/VersionList dùng số liệu, preview, lineage và empty/loading/error state thật; bỏ ảnh ngoài mạng, timeline/deadline giả và ô tìm kiếm toàn cục chưa hoạt động. Sidebar có tìm project thật và chỉ còn các module MVP đang hoạt động.
+- Chọn version ở Versions → Review → Export giữ đúng version ID; feedback từ Dashboard mở đúng comment/timestamp. Scope dữ liệu được reset khi đổi project; store bỏ response chọn project/thống kê cũ. ProjectService hợp nhất request mở DB đồng thời để không sinh nhiều connection ghi đè nhau.
+- Không seed project mẫu trong DB mới, không xóa row có sẵn của dự án cũ. Tên project trùng luôn tạo folder/DB riêng có suffix ULID; giữ Unicode và ngăn tên biến thành đường dẫn ngoài thư mục được chọn. Stats lọc project_id, tính OPEN/IN_PROGRESS/PARTIAL là chưa xong và HIGH/CRITICAL là ưu tiên cao.
+- Import version đọc metadata/timeout/cleanup bằng browser probe thật, có xác thực path/file/number/parent/metadata và chặn version number trùng. FPS là giá trị người dùng nhập để ước tính frame, không giả vờ được tự phát hiện. Canvas annotation co theo viewport giữ aspect ratio; seek bình luận sớm được chờ đến khi video sẵn sàng.
+- **Bước tiếp theo:** kiểm tra trước phát hành: filmstrip TASK-PLY-003, MP4/H.264 và footage 4K thực tế, fullscreen, native file dialog, đóng gói Windows/macOS và log GPU khi thoát test. Chưa đánh dấu toàn bộ MVP Done.
 
 #### Checklist kiểm tra trực tiếp Review Core
 
@@ -720,6 +725,14 @@ FrameFlow/
 - Preview và create dùng chung builder; create kiểm tra lại attachment ở thời điểm xuất. Bình luận legacy chưa có ảnh vẫn xuất nội dung kèm warning; attachment record có file bị mất thì chặn xuất.
 - Tên file ảnh trong gói được đánh số (`frames/0001.jpg`, `annotated/0001.png`...), không phụ thuộc tên file/ID không tin cậy; `review.json` luôn liên kết đúng ảnh. Thư mục gói dùng version number hợp lệ + ULID, không chứa target label tự nhập.
 - Chưa khẳng định package đã được một AI agent bên ngoài thực thi thành công. Kiểm thử M6 xác nhận định dạng, liên kết ảnh, dữ liệu và persistence của gói local; các giới hạn codec/4K và log GPU khi đóng test đã ghi ở trên vẫn còn.
+
+#### Kết quả Integration & Polish (M7)
+
+- Build/typecheck đạt; `pnpm test` đạt 36/36. Test mới kiểm tra project không có seed giả, tên trùng không dùng chung DB, connection load đồng thời, stats đúng project/status/priority, version lineage/metadata/validation và store chống response IPC cũ khi đổi project.
+- `pnpm test:electron` nay tạo project và import hai version qua giao diện thật (chỉ kiểm soát đường dẫn trả về từ native dialog), thay vì dùng API tạo fixture entity trực tiếp. Metadata, lineage, parser browser, preload/IPC, SQLite và filesystem chạy thật.
+- Workflow đạt: create project → import version → play/seek → comment → capture → draw 4 tools → undo/redo → save → đổi trạng thái → import SRC → export hai package → cold restart giữ dữ liệu. Đã thử keyboard Space, C/D, ←/→, Shift+←/→, 1/2/3 ưu tiên và Ctrl+Enter.
+- Kiểm tra thêm: version cũ mở đúng video và Export không nhảy về latest; project mới có thống kê 0 (không mượn số liệu project trước); đổi lại project giữ thống kê thật; feedback gần đây mở đúng version và seek 0.5s. Tìm project ở Sidebar hoạt động.
+- Screenshot/artefact: `C:\Users\QuangThi\AppData\Local\Temp\opencode\frameflow-electron-WB2EU6`. Không có renderer error/crash; log Chromium GPU lúc đóng test vẫn có, chưa xác định nguyên nhân. Các mục kiểm tra trước phát hành bên trên vẫn chưa được xác nhận.
 
 ### Milestone 1: Foundation (TASK-FND)
 
@@ -865,19 +878,19 @@ TASK-FND-001 (Scaffolding)
 
 ### MVP V0.1 — Definition of Done tổng thể
 
-- [ ] Tạo project local với folder structure
-- [ ] Import video file làm Edit Version
-- [ ] Video player hoạt động (play/pause/seek/frame step)
-- [ ] Tạo review comment tại timestamp chính xác
-- [ ] Auto-capture frame khi tạo comment
-- [ ] Vẽ annotation (arrow, rect, circle, text) lên captured frame
-- [ ] Comment list hiển thị + click to seek
-- [ ] Timeline markers tại vị trí comment
-- [ ] Comment status tracking (OPEN/FIXED/PARTIAL/REJECTED)
-- [ ] Keyboard shortcuts hoạt động
-- [ ] Import SRC files (metadata only)
-- [ ] Export Revision Package (review.json + frames/ + annotated/)
-- [ ] Tất cả data persist qua app restart (SQLite)
+- [x] Tạo project local với folder structure
+- [x] Import video file làm Edit Version
+- [x] Video player hoạt động (play/pause/seek/frame step ước tính)
+- [x] Tạo review comment tại timestamp (đã kiểm tra WebM; không bảo đảm exact frame cho mọi codec)
+- [x] Auto-capture frame khi tạo comment
+- [x] Vẽ annotation (arrow, rect, circle, text) lên captured frame
+- [x] Comment list hiển thị + click to seek
+- [x] Timeline markers tại vị trí comment
+- [x] Comment status tracking (OPEN/FIXED/PARTIAL/REJECTED)
+- [x] Keyboard shortcuts hoạt động (1/2/3 khi không focus ô nhập)
+- [x] Import SRC files (metadata cơ bản; FPS/codec chưa xác định giữ unknown)
+- [x] Export Revision Package (review.json + frames/ + annotated/)
+- [x] Data persist qua app restart (SQLite), đã xác nhận workflow smoke test
 - [ ] App chạy trên Windows (primary), macOS (secondary)
 
 ---

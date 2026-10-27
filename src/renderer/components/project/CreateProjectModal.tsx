@@ -28,12 +28,13 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
         setProjectDir(selected)
       }
     } catch (err: any) {
-      console.error(err)
+      setError(err.message || 'Không thể chọn thư mục')
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSubmitting) return
     if (!name.trim()) {
       setError('Vui lòng nhập tên dự án')
       return
@@ -62,7 +63,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+    <div role="dialog" aria-modal="true" aria-label="Tạo dự án" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
       <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50/50">
@@ -76,6 +77,8 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
             </div>
           </div>
           <button
+            disabled={isSubmitting}
+            aria-label="Đóng tạo dự án"
             onClick={onClose}
             className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition"
           >
@@ -86,7 +89,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600">
+            <div role="alert" className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600">
               {error}
             </div>
           )}
@@ -97,6 +100,9 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
               Tên dự án <span className="text-red-500">*</span>
             </label>
             <input
+              aria-label="Tên dự án"
+              disabled={isSubmitting}
+              maxLength={120}
               type="text"
               required
               value={name}
@@ -112,6 +118,8 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
               Mô tả ngắn gọn
             </label>
             <textarea
+              aria-label="Mô tả dự án"
+              disabled={isSubmitting}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Mục tiêu video, thông điệp chính..."
@@ -127,6 +135,8 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
                 Nền tảng
               </label>
               <select
+                aria-label="Nền tảng dự án"
+                disabled={isSubmitting}
                 value={targetPlatform}
                 onChange={(e) => setTargetPlatform(e.target.value)}
                 className="w-full h-9 px-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500 transition-all"
@@ -145,6 +155,8 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
                 Tỉ lệ
               </label>
               <select
+                aria-label="Tỉ lệ dự án"
+                disabled={isSubmitting}
                 value={aspectRatio}
                 onChange={(e) => setAspectRatio(e.target.value)}
                 className="w-full h-9 px-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-500 transition-all"
@@ -161,6 +173,8 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
                 Thời lượng (giây)
               </label>
               <input
+                aria-label="Thời lượng mục tiêu"
+                disabled={isSubmitting}
                 type="number"
                 min="5"
                 max="3600"
@@ -185,6 +199,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
                 className="flex-1 h-9 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500 truncate"
               />
               <button
+                disabled={isSubmitting}
                 type="button"
                 onClick={handleSelectDir}
                 className="px-3.5 h-9 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-colors shadow-2xs"

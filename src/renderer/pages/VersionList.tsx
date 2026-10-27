@@ -1,331 +1,117 @@
-import React, { useEffect, useState } from 'react'
-import { Plus, Film, Play, ArrowRight, CheckCircle2, Clock, Folder, X, Upload } from 'lucide-react'
+import React, { useEffect, useRef, useState } from 'react'
+import { Film, Plus, X } from 'lucide-react'
+import { EditVersion, Project } from '@shared/types'
 import { useProjectStore } from '../stores/project.store'
-import { CreateVersionDTO, EditVersion } from '@shared/types'
+import { probeSource } from '../lib/source-media'
+
+const buttonClass = 'px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium hover:bg-slate-50 disabled:opacity-40'
+const inputClass = 'w-full p-2 rounded-xl border border-slate-200 text-xs bg-white'
 
 export const VersionList: React.FC = () => {
-  const { activeProject, setActiveTab, refreshStats } = useProjectStore()
+  const project = useProjectStore((state) => state.activeProject)
+  if (!project) return <div className="flex-1 p-8 text-slate-500">Chọn một dự án để xem phiên bản dựng.</div>
+  return <ProjectVersions key={project.id} project={project} />
+}
+
+function ProjectVersions({ project }: { project: Project }): React.ReactElement {
+  const { openReview, refreshStats } = useProjectStore()
   const [versions, setVersions] = useState<EditVersion[]>([])
-  const [isImporting, setIsImporting] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [reload, setReload] = useState(0)
   const [showModal, setShowModal] = useState(false)
-
-  // Form state
-  const [versionName, setVersionName] = useState('')
+  const [name, setName] = useState('')
   const [videoPath, setVideoPath] = useState('')
-  const [versionNumber, setVersionNumber] = useState(1)
-  const [parentVersionId, setParentVersionId] = useState<string | null>(null)
-
-  const loadVersions = async () => {
-    if (!activeProject) return
-    const list = await window.api.listVersions(activeProject.id)
-    setVersions(list)
-    setVersionNumber(list.length + 1)
-    setVersionName(`Draft V${list.length + 1}`)
-    if (list.length > 0) {
-      setParentVersionId(list[list.length - 1].id)
-    }
-  }
+  const [fps, setFps] = useState('30')
+  const [parentId, setParentId] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [warning, setWarning] = useState('')
+  const lifetime = useRef(new AbortController())
+  const lock = useRef(false)
+  const nextNumber = Math.max(0, ...versions.map((version) => Number.isSafeInteger(version.versionNumber) ? version.versionNumber : 0)) + 1
 
   useEffect(() => {
-    loadVersions()
-  }, [activeProject])
+    const controller = new AbortController()
+    lifetime.current = controller
+    setLoading(true)
+    window.api.listVersions(project.id).then((list: EditVersion[]) => {
+      if (!controller.signal.aborted) setVersions(list)
+    }).catch(() => { if (!controller.signal.aborted) setError('Không tải được phiên bản. Vui lòng thử lại.') })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    return () => controller.abort()
+  }, [project.id, reload])
 
-  const handleSelectVideo = async () => {
-    const selected = await window.api.selectVideoFile()
-    if (selected) {
-      setVideoPath(selected)
-    }
+  const startImport = () => {
+    setName(`Draft V${nextNumber}`)
+    setVideoPath('')
+    setParentId(versions[versions.length - 1]?.id || '')
+    setError('')
+    setWarning('')
+    setShowModal(true)
   }
-
-  const handleCreateVersion = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!activeProject || !videoPath) return
-
+  const selectFile = async () => {
     try {
-      setIsImporting(true)
-
-      const tempVideo = document.createElement('video')
-      tempVideo.src = `file:///${videoPath.replace(/\\/g, '/')}`
-
-      await new Promise((resolve) => {
-        tempVideo.onloadedmetadata = () => resolve(true)
-        tempVideo.onerror = () => resolve(false)
-      })
-
-      const duration = tempVideo.duration || 0
-      const width = tempVideo.videoWidth || 1920
-      const height = tempVideo.videoHeight || 1080
-
-      const dto: CreateVersionDTO = {
-        projectId: activeProject.id,
-        versionNumber,
-        name: versionName || `Draft V${versionNumber}`,
-        videoPath,
-        parentVersionId: parentVersionId || null,
-        duration,
-        width,
-        height,
-        fps: 30,
-        createdBy: 'USER'
-      }
-
-      await window.api.createVersion(dto)
-      await loadVersions()
-      await refreshStats()
-      setIsImporting(false)
-      setShowModal(false)
-      setVideoPath('')
-    } catch (err) {
-      console.error(err)
-      setIsImporting(false)
-    }
+      const selected = await window.api.selectVideoFile()
+      if (!lifetime.current.signal.aborted && selected) setVideoPath(selected)
+    } catch { if (!lifetime.current.signal.aborted) setError('Không mở được hộp thoại chọn video.') }
   }
-
-  if (!activeProject) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#f8fafc]">
-        <Folder className="w-12 h-12 text-slate-400 mb-3" />
-        <h2 className="text-base font-bold text-slate-800">Chưa chọn dự án</h2>
-        <p className="text-xs text-slate-500 mt-1 max-w-sm">
-          Chọn một dự án để xem các phiên bản dựng.
-        </p>
-      </div>
-    )
+  const importVersion = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (lock.current || !videoPath || !name.trim()) return
+    lock.current = true
+    setImporting(true)
+    setError('')
+    setWarning('')
+    const signal = lifetime.current.signal
+    try {
+      const probe = await probeSource(videoPath, signal)
+      if (signal.aborted) return
+      if (!probe.metadata.width || !probe.metadata.height) throw new Error('Không giải mã được video. Kiểm tra tệp hoặc thử MP4 H.264/WebM.')
+      const version: EditVersion = await window.api.createVersion({
+        projectId: project.id, versionNumber: nextNumber, name: name.trim(), videoPath,
+        parentVersionId: parentId || null, duration: probe.metadata.duration,
+        width: probe.metadata.width, height: probe.metadata.height, fps: Number(fps), createdBy: 'USER'
+      })
+      if (signal.aborted) return
+      setVersions((list) => [...list, version].sort((a, b) => a.versionNumber - b.versionNumber))
+      setWarning(probe.warning || '')
+      setShowModal(false)
+      await refreshStats()
+    } catch (err) {
+      if (!signal.aborted) setError(err instanceof Error ? err.message : 'Không nhập được phiên bản.')
+    } finally {
+      lock.current = false
+      if (!signal.aborted) setImporting(false)
+    }
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-8 space-y-6 bg-[#f8fafc] text-slate-800">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-            Phiên bản dựng
-          </h1>
-          <p className="text-xs text-slate-500 font-medium">
-            Theo dõi dòng lịch sử (Lineage) từ Draft V1 đến Final. Mỗi phản hồi gắn chặt với phiên bản tương ứng.
-          </p>
-        </div>
-
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 h-9 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-sm transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Thêm bản dựng mới</span>
-        </button>
-      </div>
-
-      {/* Version Lineage Cards */}
-      <div className="space-y-3.5">
-        {versions.length === 0 ? (
-          /* When no version imported yet, show sample cards matching the mockup style */
-          [
-            {
-              id: 'v3',
-              name: 'Draft V3',
-              versionNumber: 3,
-              isLatest: true,
-              duration: '00:48',
-              res: '4K',
-              date: '28 thg 3, 2025, 3:14 CH',
-              desc: 'Đã sửa phụ đề, tăng độ sáng đoạn kết và tinh chỉnh âm thanh.',
-              thumb: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80'
-            },
-            {
-              id: 'v2',
-              name: 'Draft V2',
-              versionNumber: 2,
-              isLatest: false,
-              duration: '00:48',
-              res: '4K',
-              date: '25 thg 3, 2025, 10:20 SA',
-              desc: 'Bổ sung các đoạn phỏng vấn ngoài trời và đồng bộ nhạc nền.',
-              thumb: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=600&q=80'
-            },
-            {
-              id: 'v1',
-              name: 'Draft V1',
-              versionNumber: 1,
-              isLatest: false,
-              duration: '00:52',
-              res: '4K',
-              date: '20 thg 3, 2025, 4:45 CH',
-              desc: 'Bản dựng thô ráp nối toàn bộ kịch bản ban đầu.',
-              thumb: 'https://images.unsplash.com/photo-1541829070764-84a7d30dd3f3?auto=format&fit=crop&w=600&q=80'
-            }
-          ].map((ver) => (
-            <div
-              key={ver.id}
-              className={`p-4 bg-white border rounded-2xl flex items-center justify-between transition-all hover:shadow-md ${
-                ver.isLatest
-                  ? 'border-blue-500/80 ring-2 ring-blue-500/10 shadow-sm'
-                  : 'border-slate-200/90 shadow-2xs'
-              }`}
-            >
-              <div className="flex items-center gap-4">
-                <div className="relative w-28 h-18 bg-slate-900 rounded-xl overflow-hidden shrink-0 border border-slate-200 shadow-2xs">
-                  <img src={ver.thumb} alt={ver.name} className="w-full h-full object-cover" />
-                  <span className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-black/80 rounded text-[9px] font-mono text-white">
-                    {ver.duration}
-                  </span>
-                </div>
-
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-bold text-slate-900">{ver.name}</h3>
-                    {ver.isLatest && (
-                      <span className="px-2 py-0.5 text-[10px] bg-blue-50 text-blue-600 font-bold border border-blue-200 rounded-md">
-                        MỚI NHẤT
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1">{ver.desc}</p>
-                  <p className="text-[11px] text-slate-400 mt-1 font-medium">
-                    {ver.res} • {ver.date}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('review')}
-                  className="flex items-center gap-2 px-3.5 h-9 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl transition-colors shadow-sm"
-                >
-                  <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>Duyệt bản dựng</span>
-                </button>
-              </div>
-            </div>
-          ))
-        ) : (
-          versions.map((ver, idx) => {
-            const isLatest = idx === versions.length - 1
-            return (
-              <div
-                key={ver.id}
-                className={`p-4 bg-white border rounded-2xl flex items-center justify-between transition-all hover:shadow-md ${
-                  isLatest
-                    ? 'border-blue-500/80 ring-2 ring-blue-500/10 shadow-sm'
-                    : 'border-slate-200/90 shadow-2xs'
-                }`}
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 font-bold text-base shrink-0">
-                    V{ver.versionNumber}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-bold text-slate-900">{ver.name}</h3>
-                      {isLatest && (
-                        <span className="px-2 py-0.5 text-[10px] bg-blue-50 text-blue-600 font-bold border border-blue-200 rounded-md">
-                          MỚI NHẤT
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-500 mt-1 font-mono truncate max-w-lg">
-                      {ver.videoPath}
-                    </p>
-                    <div className="flex items-center gap-2.5 mt-1 text-xs text-slate-400">
-                      <span>{Math.round(ver.duration || 0)}s</span>
-                      <span>•</span>
-                      <span>
-                        {ver.width}x{ver.height}
-                      </span>
-                      <span>•</span>
-                      <span>Tạo ngày {new Date(ver.createdAt).toLocaleDateString('vi-VN')}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('review')}
-                    className="flex items-center gap-2 px-3.5 h-9 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl transition-colors shadow-sm"
-                  >
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>Duyệt bản dựng</span>
-                  </button>
-                </div>
-              </div>
-            )
-          })
-        )}
-      </div>
-
-      {/* Modal Import Version */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg shadow-2xl p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <h2 className="text-sm font-bold text-slate-900">Import phiên bản dựng mới</h2>
-              <button
-                type="button"
-                onClick={() => setShowModal(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateVersion} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1.5">
-                  Tên phiên bản
-                </label>
-                <input
-                  type="text"
-                  value={versionName}
-                  onChange={(e) => setVersionName(e.target.value)}
-                  placeholder="VD: Draft V2"
-                  className="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1.5">
-                  Tệp video (*.mp4, *.mov)
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={videoPath}
-                    placeholder="Chưa chọn tệp video"
-                    className="flex-1 h-9 px-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 truncate"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleSelectVideo}
-                    className="px-3.5 h-9 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-medium flex items-center gap-1.5 shadow-2xs"
-                  >
-                    <Folder className="w-3.5 h-3.5 text-slate-500" />
-                    <span>Chọn tệp</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 h-9 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-medium rounded-xl transition-colors shadow-2xs"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  disabled={!videoPath || isImporting}
-                  className="px-4 h-9 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl shadow-sm transition-colors disabled:opacity-50"
-                >
-                  {isImporting ? 'Đang phân tích...' : 'Lưu phiên bản'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+    <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-[#f8fafc] text-slate-800 min-w-0">
+      <header className="flex justify-between items-start gap-3"><div><h1 className="text-2xl font-bold">Phiên bản dựng</h1><p className="text-xs text-slate-500 mt-1">{project.name} · Mỗi feedback luôn thuộc đúng phiên bản video.</p></div><button className={`${buttonClass} flex gap-2 items-center`} disabled={loading} onClick={startImport}><Plus size={14} />Thêm bản dựng mới</button></header>
+      {error && !showModal && <div role="alert" className="text-xs text-red-700 space-x-3"><span>{error}</span><button className={buttonClass} onClick={() => { setError(''); setReload((value) => value + 1) }}>Tải lại</button></div>}
+      {warning && <p role="status" className="text-xs text-amber-700">{warning}</p>}
+      {loading ? <p role="status" className="text-xs text-slate-500">Đang tải phiên bản...</p> : !versions.length ? <div className="p-10 border border-dashed rounded-2xl text-center text-slate-500 space-y-3"><Film className="mx-auto" /><p>Chưa có bản dựng. Nhập video đầu tiên để bắt đầu review.</p></div> : <div className="space-y-3">
+        {[...versions].reverse().map((version) => <article key={version.id} className="bg-white border border-slate-200 p-4 rounded-2xl flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0 flex-1 space-y-1"><h2 className="text-sm font-bold">V{version.versionNumber} — {version.name}{version.id === versions[versions.length - 1].id && <span className="ml-2 text-[10px] text-blue-600">MỚI NHẤT</span>}</h2>
+            <p className="text-xs text-slate-500 break-all">{version.videoPath}</p>
+            <p className="text-[11px] text-slate-400">{version.duration ? `${version.duration.toFixed(2)}s` : 'Chưa rõ thời lượng'} · {version.width && version.height ? `${version.width}×${version.height}` : 'Chưa rõ độ phân giải'} · FPS ước tính: {version.fps ?? 'chưa nhập'} · {new Date(version.createdAt).toLocaleString('vi-VN')}</p>
+            <p className="text-[11px] text-slate-500">{version.parentVersionId ? `Kế thừa: ${versions.find((parent) => parent.id === version.parentVersionId)?.name || version.parentVersionId} → ${version.name}` : 'Phiên bản gốc (không có cha)'}</p>
+          </div><button aria-label={`Duyệt ${version.name}`} className={`${buttonClass} bg-blue-600 text-white hover:bg-blue-700`} onClick={() => openReview(version.id)}>Duyệt bản dựng</button>
+        </article>)}
+      </div>}
+      {showModal && <div role="dialog" aria-modal="true" aria-label="Nhập phiên bản dựng" className="fixed inset-0 z-50 bg-black/40 p-4 flex items-center justify-center">
+        <form onSubmit={(event) => { void importVersion(event) }} className="bg-white rounded-2xl p-6 w-full max-w-lg space-y-4">
+          <div className="flex justify-between"><h2 className="font-bold text-sm">Nhập phiên bản V{nextNumber}</h2><button type="button" aria-label="Đóng nhập phiên bản" disabled={importing} onClick={() => setShowModal(false)}><X size={16} /></button></div>
+          {error && <p role="alert" className="text-xs text-red-700">{error}</p>}
+          <fieldset disabled={importing} className="space-y-3">
+            <label className="block text-xs space-y-1"><span>Tên phiên bản</span><input aria-label="Tên phiên bản nhập" required maxLength={120} className={inputClass} value={name} onChange={(event) => setName(event.target.value)} /></label>
+            <div className="space-y-1"><p className="text-xs">Video (giữ đường dẫn gốc, không copy)</p><div className="flex gap-2"><input aria-label="Đường dẫn video nhập" readOnly value={videoPath} className={`${inputClass} min-w-0`} /><button type="button" className={`${buttonClass} shrink-0`} onClick={() => { void selectFile() }}>Chọn tệp</button></div></div>
+            <label className="block text-xs space-y-1"><span>Phiên bản cha</span><select aria-label="Phiên bản cha" className={inputClass} value={parentId} onChange={(event) => setParentId(event.target.value)}><option value="">Không có</option>{versions.map((version) => <option key={version.id} value={version.id}>V{version.versionNumber} — {version.name}</option>)}</select></label>
+            <label className="block text-xs space-y-1"><span>FPS dùng ước tính frame (tự nhập, không được tự phát hiện)</span><input aria-label="FPS ước tính" type="number" min="1" max="240" step="0.001" required value={fps} onChange={(event) => setFps(event.target.value)} className={inputClass} /></label>
+          </fieldset>
+          <div className="flex justify-end gap-2"><button type="button" className={buttonClass} disabled={importing} onClick={() => setShowModal(false)}>Hủy</button><button type="submit" className={`${buttonClass} bg-blue-600 text-white hover:bg-blue-700`} disabled={importing || !videoPath || !name.trim()}>{importing ? 'Đang nhập...' : 'Lưu phiên bản'}</button></div>
+        </form>
+      </div>}
     </div>
   )
 }

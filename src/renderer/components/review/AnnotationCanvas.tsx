@@ -83,7 +83,7 @@ export const AnnotationCanvas = React.forwardRef<
       {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
       {!loaded && !error && <p role="status" className="text-xs text-slate-400">Đang tải frame...</p>}
       <canvas ref={canvasRef} width={size.width} height={size.height} aria-label={readOnly ? 'Frame đã lưu cùng annotation' : 'Vẽ annotation lên frame'}
-        className={`w-full h-auto bg-black rounded-lg border border-slate-200 touch-none ${readOnly ? '' : 'cursor-crosshair'}`}
+        className={`block mx-auto max-w-full max-h-[50vh] w-auto h-auto bg-black rounded-lg border border-slate-200 touch-none ${readOnly ? '' : 'cursor-crosshair'}`}
         onPointerDown={(event) => {
           if (readOnly || !loaded || event.button !== 0) return
           const start = point(event)

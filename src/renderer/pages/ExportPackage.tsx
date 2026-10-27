@@ -21,6 +21,8 @@ export const ExportPackage: React.FC = () => {
 
 function ProjectExport({ project }: { project: Project }): React.ReactElement {
   const setActiveTab = useProjectStore((state) => state.setActiveTab)
+  const initialVersionId = useProjectStore((state) => state.activeVersionId)
+  const selectVersion = useProjectStore((state) => state.selectVersion)
   const [versions, setVersions] = useState<EditVersion[]>([])
   const [sourceId, setSourceId] = useState('')
   const [loading, setLoading] = useState(true)
@@ -32,7 +34,7 @@ function ProjectExport({ project }: { project: Project }): React.ReactElement {
     window.api.listVersions(project.id).then((list: EditVersion[]) => {
       if (cancelled) return
       setVersions(list)
-      setSourceId(list[list.length - 1]?.id || '')
+      setSourceId((list.find((version) => version.id === initialVersionId) || list[list.length - 1])?.id || '')
     }).catch(() => { if (!cancelled) setError('Không tải được phiên bản. Hãy mở lại màn hình Xuất.') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
@@ -43,7 +45,7 @@ function ProjectExport({ project }: { project: Project }): React.ReactElement {
     <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-[#f8fafc] text-slate-800 min-w-0">
       <header><h1 className="text-2xl font-bold">Xuất gói chỉnh sửa</h1><p className="text-xs text-slate-500 mt-1">{project.name} · Tạo thư mục local để bạn chuyển cho AI agent/editor. Không tự gửi dữ liệu ra ngoài.</p></header>
       {loading ? <p role="status">Đang tải phiên bản...</p> : error ? <p role="alert" className="text-red-600 text-xs">{error}</p> : !source ? <div className="p-8 border border-dashed rounded-xl text-center space-y-3 text-slate-500"><Folder className="mx-auto" /><p>Chưa có bản dựng để xuất feedback.</p><button className={buttonClass} onClick={() => setActiveTab('versions')}>Đến Phiên bản</button></div> : <>
-        <label className="block max-w-md text-xs space-y-2"><span className="font-semibold">Phiên bản nguồn</span><select aria-label="Phiên bản nguồn xuất" className={inputClass} value={sourceId} disabled={busy} onChange={(event) => setSourceId(event.target.value)}>
+        <label className="block max-w-md text-xs space-y-2"><span className="font-semibold">Phiên bản nguồn</span><select aria-label="Phiên bản nguồn xuất" className={inputClass} value={sourceId} disabled={busy} onChange={(event) => { setSourceId(event.target.value); selectVersion(event.target.value) }}>
           {versions.map((version) => <option key={version.id} value={version.id}>V{version.versionNumber} — {version.name}</option>)}
         </select></label>
         <VersionExport key={source.id} project={project} source={source} onBusy={setBusy} />
