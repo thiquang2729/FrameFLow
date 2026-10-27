@@ -671,7 +671,10 @@ FrameFlow/
 - Git workflow: `main` giữ baseline `6beff8c`; phát triển tính năng trên `dev`, chỉ merge sau khi kiểm tra workflow trực tiếp.
 - **M5 đã triển khai trên `dev`:** SRC Library bỏ toàn bộ sample clips/điểm số/AI summary giả; nhập nhiều file hoặc thư mục đệ quy, thumbnail JPEG lưu bền, metadata thật, tìm tên/đường dẫn, sắp xếp mới/tên/dung lượng, lưới/danh sách và inspector preview video/ảnh. Không copy footage, chỉ lưu đường dẫn canonical và dung lượng từ filesystem; chống nhập trùng trong project, kể cả request đồng thời.
 - Thêm migration `thumbnail_path` cho DB cũ (không xóa dữ liệu), IPC quét thư mục giới hạn 10.000 mục và không đi theo symlink/junction. Import xử lý lỗi từng tệp, timeout/cleanup decoder, dừng công việc renderer khi đổi project. FPS/codec không được suy đoán; duration/resolution không đọc được giữ NULL và UI báo chưa xác định.
-- **Bước tiếp theo:** M6 — Revision Package Export với dữ liệu thật. Smoke test M4/M5 trong Electron đã đạt như báo cáo dưới đây; filmstrip TASK-PLY-003, codec MP4/H.264 thực tế, thao tác fullscreen và video 4K thực tế vẫn chưa được kiểm thử đầy đủ. Chưa đánh dấu toàn bộ MVP Done.
+- **M6 đã triển khai trên `dev`:** màn hình Export không còn mock/simulate. Chọn source version thật, target label, bình luận theo status/priority, instructions tối đa 2.000 ký tự; preview file/byte count và review.json qua IPC. Mặc định không chọn FIXED/REJECTED nhưng có thể chọn thủ công; filter không tự bỏ các item đang được chọn.
+- Export gồm đúng `review.json`, `README.md`, `instructions.md`, `frames/`, `annotated/`. Context dự án nằm trong Markdown; JSON giữ source version ID, timestamp, frame ước tính, status và đường dẫn ảnh tương đối. Không giả lập gửi agent hay thêm SRC/preferences/locked segments chưa có chức năng.
+- Backend kiểm tra ownership/version/selection, path containment cả realpath/symlink, cảnh báo legacy comment không có frame và chặn ảnh có attachment record nhưng file thiếu. Preview read-only; tạo gói sẽ kiểm tra lại, build vào staging riêng rồi publish thư mục ULID và ghi DB transaction. Lỗi lưu dọn gói mới, không sửa gói cũ.
+- **Bước tiếp theo:** M7 — integration/polish và xử lý dữ liệu mẫu còn ở Dashboard/VersionList. Smoke test M4/M5/M6 trong Electron đã đạt như báo cáo dưới đây; filmstrip TASK-PLY-003, codec MP4/H.264 thực tế, thao tác fullscreen và video 4K thực tế vẫn chưa được kiểm thử đầy đủ. Chưa đánh dấu toàn bộ MVP Done.
 
 #### Checklist kiểm tra trực tiếp Review Core
 
@@ -708,6 +711,15 @@ FrameFlow/
 - Đã kiểm tra tìm tên có ký tự `#`, chuyển list, sort, preview video và cold restart giữ nguyên source records/metadata/thumbnails. File hỏng được giữ path với metadata trống, không gán thông số giả.
 - Fixture/test profile tách biệt dữ liệu người dùng; ảnh chụp SRC và kết quả test nằm trong thư mục tạm được in bởi `pnpm test:electron`. Các giới hạn codec/4K/native dialog tương tự báo cáo M4 vẫn còn.
 - Lần chạy cuối: `C:\Users\QuangThi\AppData\Local\Temp\opencode\frameflow-electron-uqpWML`. Cả hai tiến trình test thoát mã 0; Chromium ghi `GPU state invalid after WaitForGetOffsetInRange` khi đóng test. Không có renderer error/crash hoặc lỗi đối chiếu ảnh; chưa xác định nguyên nhân log GPU này.
+
+#### Kết quả Revision Package Export (M6)
+
+- Build/typecheck đạt; `pnpm test` đạt 29/29, bao gồm 10 test ExportService với SQLite thật: preview không ghi file/DB, byte count UTF-8 chính xác, selection/sort/frame 0/status, giữ context/instructions tiếng Việt, copy byte ảnh, mở lại DB, xuất đồng thời không ghi đè, validation, thiếu media sau preview, traversal/symlink/junction và rollback khi ghi DB lỗi.
+- Smoke test Electron: chọn source version thật, xác nhận FIXED không được chọn mặc định → chọn thủ công → nhập target/instructions → preview 5 file thật → đổi filter không làm mất item đã chọn → xuất hai gói khác thư mục → kiểm tra JSON/JPEG/PNG/Markdown → restart cả ứng dụng vẫn còn đủ hai gói.
+- Nút Mở thư mục truyền đúng đường dẫn qua preload/IPC; test thay `shell.openPath` để không mở cửa sổ Explorer ngoài test. Không thử gửi agent hoặc dùng dịch vụ mạng.
+- Preview và create dùng chung builder; create kiểm tra lại attachment ở thời điểm xuất. Bình luận legacy chưa có ảnh vẫn xuất nội dung kèm warning; attachment record có file bị mất thì chặn xuất.
+- Tên file ảnh trong gói được đánh số (`frames/0001.jpg`, `annotated/0001.png`...), không phụ thuộc tên file/ID không tin cậy; `review.json` luôn liên kết đúng ảnh. Thư mục gói dùng version number hợp lệ + ULID, không chứa target label tự nhập.
+- Chưa khẳng định package đã được một AI agent bên ngoài thực thi thành công. Kiểm thử M6 xác nhận định dạng, liên kết ảnh, dữ liệu và persistence của gói local; các giới hạn codec/4K và log GPU khi đóng test đã ghi ở trên vẫn còn.
 
 ### Milestone 1: Foundation (TASK-FND)
 

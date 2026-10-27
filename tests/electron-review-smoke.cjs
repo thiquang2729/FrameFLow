@@ -1,6 +1,6 @@
 // Run against a production build: pnpm build, then pnpm test:electron.
 // No external media, test framework or user project is needed.
-const { app, BrowserWindow, dialog } = require('electron')
+const { app, BrowserWindow, dialog, shell } = require('electron')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const os = require('node:os')
@@ -128,8 +128,17 @@ async function run() {
     const savedSources = await evaluate(`window.api.listSources(${JSON.stringify(previous.project.id)})`)
     assert.deepEqual(JSON.parse(JSON.stringify(savedSources)), previous.sourceAssets)
     for (const asset of savedSources.filter((item) => item.thumbnailPath)) assert.ok(fs.existsSync(path.join(previous.project.projectPath, asset.thumbnailPath)))
+    for (const packagePath of previous.packagePaths) {
+      const review = JSON.parse(fs.readFileSync(path.join(packagePath, 'review.json'), 'utf8'))
+      assert.equal(review.sourceVersionId, previous.comment.editVersionId)
+      assert.equal(review.reviews.length, 1)
+      for (const item of review.reviews) {
+        assert.ok(fs.existsSync(path.join(packagePath, item.frameImage)))
+        assert.ok(fs.existsSync(path.join(packagePath, item.annotationImage)))
+      }
+    }
     assert.deepEqual(failures, [])
-    console.log(JSON.stringify({ status: 'PASS', results: ['Full Electron process restart restores project, timestamp, FIXED status and pixel-identical annotation PNG', 'SRC records, metadata and thumbnail files survive full process restart'], artifacts: root }, null, 2))
+    console.log(JSON.stringify({ status: 'PASS', results: ['Full Electron process restart restores project, timestamp, FIXED status and pixel-identical annotation PNG', 'SRC records, metadata, thumbnails and both independent revision packages survive full process restart'], artifacts: root }, null, 2))
     return
   }
 
@@ -276,8 +285,55 @@ async function run() {
   await change('select[aria-label="Sắp xếp tư liệu"]', 'name')
   await window.webContents.capturePage().then((image) => fs.writeFileSync(path.join(root, 'source-library.png'), image.toPNG()))
   results.push('SRC UI imports multiple files and recursive folder, skips duplicates, warns on corrupt media, persists 3 real thumbnails, filters/sorts and previews local media')
+
+  await clickText('Xuất')
+  await waitFor(`Boolean(document.querySelector('input[aria-label="Xuất R001"]'))`, 'export page loads real feedback')
+  assert.equal(await evaluate(`document.querySelector('input[aria-label="Xuất R001"]').checked`), false, 'resolved feedback is not selected by default')
+  await change('select[aria-label="Phiên bản nguồn xuất"]', fixtures[0].version.id)
+  await waitFor(`document.body.textContent.includes('Phiên bản này chưa có bình luận.')`, 'export source version isolation')
+  await change('select[aria-label="Phiên bản nguồn xuất"]', fixtures[1].version.id)
+  await waitFor(`Boolean(document.querySelector('input[aria-label="Xuất R001"]'))`, 'return to reviewed export source')
+  await change('input[aria-label="Tên phiên bản đích"]', 'Draft V3')
+  const exportInstructions = 'Di chuyển phụ đề xuống thấp. Giữ nguyên âm thanh và màu sắc.'
+  await change('textarea[aria-label="Hướng dẫn chỉnh sửa"]', exportInstructions)
+  await evaluate(`document.querySelector('input[aria-label="Xuất R001"]').click()`)
+  await waitFor(`document.querySelectorAll('ul[aria-label="Danh sách file gói xuất"] li').length === 5`, 'export preview lists real JSON, markdown and both images')
+  assert.equal(await evaluate(`document.body.textContent.includes('source_library.json') || document.body.textContent.includes('preferences.json')`), false)
+  await change('select[aria-label="Lọc ưu tiên xuất"]', 'HIGH')
+  await waitFor(`document.body.textContent.includes('Không có bình luận phù hợp bộ lọc.')`, 'export filter hides unmatching rows')
+  assert.equal(await evaluate(`document.querySelectorAll('ul[aria-label="Danh sách file gói xuất"] li').length`), 5, 'hidden selected comment remains in preview')
+  await change('select[aria-label="Lọc ưu tiên xuất"]', 'ALL')
+  await clickText('Tạo gói chỉnh sửa')
+  await waitFor(`Boolean(document.querySelector('[aria-label="Đường dẫn gói đã xuất"]'))`, 'local revision folder is created')
+  const firstPackage = await evaluate(`document.querySelector('[aria-label="Đường dẫn gói đã xuất"]').textContent`)
+  const firstReviewBytes = fs.readFileSync(path.join(firstPackage, 'review.json'))
+  const exportedReview = JSON.parse(firstReviewBytes)
+  assert.equal(exportedReview.instructions, exportInstructions)
+  assert.equal(exportedReview.sourceVersionId, comment.editVersionId)
+  assert.equal(exportedReview.targetVersion, 'Draft V3')
+  assert.equal(exportedReview.reviews.length, 1)
+  assert.equal(exportedReview.reviews[0].timestamp, 0.5)
+  assert.equal(exportedReview.reviews[0].status, 'fixed')
+  assert.deepEqual(fs.readFileSync(path.join(firstPackage, exportedReview.reviews[0].frameImage)), fs.readFileSync(path.join(project.projectPath, original.filePath)))
+  assert.deepEqual(fs.readFileSync(path.join(firstPackage, exportedReview.reviews[0].annotationImage)), fs.readFileSync(path.join(project.projectPath, png.filePath)))
+  assert.ok(fs.readFileSync(path.join(firstPackage, 'instructions.md'), 'utf8').includes(exportInstructions))
+  assert.ok(fs.existsSync(path.join(firstPackage, 'README.md')))
+  await clickText('Tạo gói chỉnh sửa')
+  await waitFor(`document.querySelector('[aria-label="Đường dẫn gói đã xuất"]')?.textContent !== ${JSON.stringify(firstPackage)} && Boolean(document.querySelector('[aria-label="Đường dẫn gói đã xuất"]'))`, 'second export gets a unique directory')
+  const secondPackage = await evaluate(`document.querySelector('[aria-label="Đường dẫn gói đã xuất"]').textContent`)
+  assert.notEqual(firstPackage, secondPackage)
+  assert.deepEqual(fs.readFileSync(path.join(firstPackage, 'review.json')), firstReviewBytes)
+  const originalOpenPath = shell.openPath
+  let openedPath
+  shell.openPath = async (folderPath) => { openedPath = folderPath; return '' }
+  await clickText('Mở thư mục gói')
+  assert.equal(openedPath, secondPackage)
+  shell.openPath = originalOpenPath
+  await window.webContents.capturePage().then((image) => fs.writeFileSync(path.join(root, 'export-package.png'), image.toPNG()))
+  const packagePaths = [firstPackage, secondPackage]
+  results.push('Real Export UI selects version/feedback, preserves hidden selections, previews 5 files, exports exact images/instructions twice without overwrite and opens the correct local folder')
   assert.deepEqual(failures, [], 'No renderer errors')
-  fs.writeFileSync(path.join(root, 'result.json'), JSON.stringify({ passed: results, project, comment, sourceAssets }, null, 2))
+  fs.writeFileSync(path.join(root, 'result.json'), JSON.stringify({ passed: results, project, comment, sourceAssets, packagePaths }, null, 2))
   console.log(JSON.stringify({ status: 'PASS', results, artifacts: root }, null, 2))
 }
 

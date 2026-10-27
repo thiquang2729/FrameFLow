@@ -41,6 +41,8 @@ const api = {
   scanSourceDirectory: (directory: string) => ipcRenderer.invoke(IPC_CHANNELS.SOURCE_SCAN_DIRECTORY, directory),
 
   // Packages
+  previewPackage: (dto: CreateRevisionPackageDTO) =>
+    ipcRenderer.invoke(IPC_CHANNELS.PACKAGE_PREVIEW, dto),
   createPackage: (dto: CreateRevisionPackageDTO) =>
     ipcRenderer.invoke(IPC_CHANNELS.PACKAGE_CREATE, dto),
   openPackageFolder: (folderPath: string) =>

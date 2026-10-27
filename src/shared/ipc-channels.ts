@@ -26,5 +26,6 @@ export const IPC_CHANNELS = {
 
   // Revision Package
   PACKAGE_CREATE: 'package:create',
+  PACKAGE_PREVIEW: 'package:preview',
   PACKAGE_OPEN_FOLDER: 'package:open-folder'
 } as const

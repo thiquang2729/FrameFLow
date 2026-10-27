@@ -122,12 +122,16 @@ export function registerIpcHandlers(
   })
 
   // --- Package Export ---
+  ipcMain.handle(IPC_CHANNELS.PACKAGE_PREVIEW, async (_, dto: CreateRevisionPackageDTO) => {
+    return exportService.previewPackage(dto)
+  })
   ipcMain.handle(IPC_CHANNELS.PACKAGE_CREATE, async (_, dto: CreateRevisionPackageDTO) => {
     return exportService.createPackage(dto)
   })
 
   ipcMain.handle(IPC_CHANNELS.PACKAGE_OPEN_FOLDER, async (_, folderPath: string) => {
-    await shell.openPath(folderPath)
+    const error = await shell.openPath(folderPath)
+    if (error) throw new Error(error)
     return true
   })
 }
