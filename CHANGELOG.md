@@ -9,6 +9,8 @@ Quy ước đặt phiên bản tuân theo [Semantic Versioning](https://semver.o
 ## [Unreleased]
 
 ### Added
+- Cấu hình electron-builder cho Windows x64, artefact unpacked/NSIS unsigned và checklist phát hành; build scripts không publish.
+- `pnpm test:packaged` kiểm tra EXE thật: preload/IPC/SQLite/WASM, WebM/VP8 4K và MP4/H.264 (fixture tự tạo), capture/annotation/export đúng resolution và cold restart với dữ liệu tạm riêng.
 - M7 integration: Dashboard/Versions dùng dữ liệu thật, tìm project, trạng thái tải/lỗi/trống; import version qua browser probe có timeout và lineage/FPS ước tính do người dùng nhập.
 - Smoke test tạo project/import version qua UI và kiểm tra đầy đủ phím tắt, điều hướng version/comment, project isolation và workflow sau restart; thêm test project/version/store race conditions.
 - M6 Revision Package Export thật: chọn version/feedback, lọc status/priority, instructions, preview JSON/file sizes và tạo folder local chứa README.md, review.json, instructions.md, frames/, annotated/.

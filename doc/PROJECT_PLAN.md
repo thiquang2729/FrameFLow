@@ -679,7 +679,10 @@ FrameFlow/
 - Chọn version ở Versions → Review → Export giữ đúng version ID; feedback từ Dashboard mở đúng comment/timestamp. Scope dữ liệu được reset khi đổi project; store bỏ response chọn project/thống kê cũ. ProjectService hợp nhất request mở DB đồng thời để không sinh nhiều connection ghi đè nhau.
 - Không seed project mẫu trong DB mới, không xóa row có sẵn của dự án cũ. Tên project trùng luôn tạo folder/DB riêng có suffix ULID; giữ Unicode và ngăn tên biến thành đường dẫn ngoài thư mục được chọn. Stats lọc project_id, tính OPEN/IN_PROGRESS/PARTIAL là chưa xong và HIGH/CRITICAL là ưu tiên cao.
 - Import version đọc metadata/timeout/cleanup bằng browser probe thật, có xác thực path/file/number/parent/metadata và chặn version number trùng. FPS là giá trị người dùng nhập để ước tính frame, không giả vờ được tự phát hiện. Canvas annotation co theo viewport giữ aspect ratio; seek bình luận sớm được chờ đến khi video sẵn sàng.
-- **Bước tiếp theo:** kiểm tra trước phát hành: filmstrip TASK-PLY-003, MP4/H.264 và footage 4K thực tế, fullscreen, native file dialog, đóng gói Windows/macOS và log GPU khi thoát test. Chưa đánh dấu toàn bộ MVP Done.
+- **M7 đã commit:** `23178bf` trên `dev`; chưa merge vào `main`.
+- **Kiểm tra bản Windows đóng gói đã đạt:** thêm `electron-builder.yml`, tạo EXE unpacked và installer NSIS x64 local. SQLite WASM được unpack khỏi ASAR; build scripts khóa `--publish never`. Installer unsigned, icon Electron mặc định, chưa chạy cài/gỡ.
+- `pnpm test:packaged` chạy EXE thật qua localhost DevTools Protocol tạm, không có test hook trong code app; dùng registry/profile/project/video riêng ở thư mục tạm. Đã xác nhận WebM/VP8 3840×2160 và MP4/H.264 640×360 qua playback → capture → arrow annotation → export PNG đúng resolution → cold restart. Đây là fixture ngắn tự tạo, chưa phải footage camera dài/bitrate cao.
+- **Bước tiếp theo:** filmstrip TASK-PLY-003, cảnh báo rời comment chưa lưu, fullscreen/native file dialog, footage H.264/VFR/4K thực tế và thử cài/gỡ installer trên máy sạch. Xem `doc/RELEASE_CHECKLIST.md`; macOS/Linux và log GPU lúc đóng test vẫn chưa được xác nhận/xử lý. Chưa đánh dấu toàn bộ MVP Done.
 
 #### Checklist kiểm tra trực tiếp Review Core
 
@@ -733,6 +736,15 @@ FrameFlow/
 - Workflow đạt: create project → import version → play/seek → comment → capture → draw 4 tools → undo/redo → save → đổi trạng thái → import SRC → export hai package → cold restart giữ dữ liệu. Đã thử keyboard Space, C/D, ←/→, Shift+←/→, 1/2/3 ưu tiên và Ctrl+Enter.
 - Kiểm tra thêm: version cũ mở đúng video và Export không nhảy về latest; project mới có thống kê 0 (không mượn số liệu project trước); đổi lại project giữ thống kê thật; feedback gần đây mở đúng version và seek 0.5s. Tìm project ở Sidebar hoạt động.
 - Screenshot/artefact: `C:\Users\QuangThi\AppData\Local\Temp\opencode\frameflow-electron-WB2EU6`. Không có renderer error/crash; log Chromium GPU lúc đóng test vẫn có, chưa xác định nguyên nhân. Các mục kiểm tra trước phát hành bên trên vẫn chưa được xác nhận.
+
+#### Kết quả kiểm tra Windows đóng gói
+
+- `pnpm build:unpack` và `pnpm build:win` thành công trên Windows x64 / Electron 33.4.11. Artefact local: `release/win-unpacked/FrameFlow.exe` và `release/FrameFlow-0.1.0-setup.exe` (~96 MB decimal).
+- `Get-AuthenticodeSignature` xác nhận installer `NotSigned`. Không cài đặt, publish hay dùng credential ký số; `release/` không đưa vào Git.
+- `pnpm test:packaged` đạt trên chính EXE trong `win-unpacked`, không dùng dev server hoặc Electron harness thay thế app. Assert renderer đến từ `app.asar`; preload, IPC và SQLite/WASM hoạt động sau restart.
+- Case đã thực thi (không skip): `video/webm;codecs=vp8` 3840×2160 và `video/mp4;codecs=avc1.42001f` 640×360. Test kiểm codec ID trong container, playback, capture, preview aspect ratio, lưu arrow JSON + JPEG + PNG, export package và cold restart; notes rỗng, không có renderer exception.
+- Report/screenshot/log: `C:\Users\QuangThi\AppData\Local\Temp\opencode\frameflow-packaged-qOjvIS`. Unit/service/store test vẫn 36/36 đạt.
+- Chưa thử installer execution/upgrade/uninstall, footage camera, performance dài hạn, audio/VFR, macOS/Linux hoặc ký số/branding riêng. Những mục này nằm trong release checklist, không suy diễn từ smoke test tự động.
 
 ### Milestone 1: Foundation (TASK-FND)
 
@@ -891,7 +903,8 @@ TASK-FND-001 (Scaffolding)
 - [x] Import SRC files (metadata cơ bản; FPS/codec chưa xác định giữ unknown)
 - [x] Export Revision Package (review.json + frames/ + annotated/)
 - [x] Data persist qua app restart (SQLite), đã xác nhận workflow smoke test
-- [ ] App chạy trên Windows (primary), macOS (secondary)
+- [x] App chạy trên Windows (unpacked EXE đã kiểm thử, installer đã build nhưng chưa chạy cài/gỡ)
+- [ ] macOS (secondary) — chưa build/chạy kiểm thử
 
 ---
 

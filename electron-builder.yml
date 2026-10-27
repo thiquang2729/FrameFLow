@@ -1,0 +1,25 @@
+appId: com.frameflow.desktop
+productName: FrameFlow
+directories:
+  output: release
+files:
+  - out/**
+  - package.json
+asar: true
+asarUnpack:
+  - '**/*.wasm'
+npmRebuild: false
+win:
+  executableName: FrameFlow
+  target:
+    - target: nsis
+      arch:
+        - x64
+  signAndEditExecutable: false
+nsis:
+  artifactName: FrameFlow-${version}-setup.${ext}
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
