@@ -1,0 +1,128 @@
+import { dialog, ipcMain, shell } from 'electron'
+import { IPC_CHANNELS } from '@shared/ipc-channels'
+import {
+  CreateCommentDTO,
+  CreateProjectDTO,
+  CreateRevisionPackageDTO,
+  CreateVersionDTO,
+  ImportSourceDTO,
+  UpdateCommentStatusDTO
+} from '@shared/types'
+import { ProjectService } from '../services/project.service'
+import { VersionService } from '../services/version.service'
+import { ReviewService } from '../services/review.service'
+import { SourceService } from '../services/source.service'
+import { ExportService } from '../services/export.service'
+
+export function registerIpcHandlers(
+  projectService: ProjectService,
+  versionService: VersionService,
+  reviewService: ReviewService,
+  sourceService: SourceService,
+  exportService: ExportService
+): void {
+  // --- Dialogs ---
+  ipcMain.handle(IPC_CHANNELS.SELECT_DIRECTORY, async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory', 'createDirectory']
+    })
+    return result.canceled ? null : result.filePaths[0]
+  })
+
+  ipcMain.handle(IPC_CHANNELS.SELECT_VIDEO_FILE, async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [
+        { name: 'Video Files', extensions: ['mp4', 'mov', 'mkv', 'webm', 'avi'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    })
+    return result.canceled ? null : result.filePaths[0]
+  })
+
+  ipcMain.handle(IPC_CHANNELS.SELECT_MEDIA_FILES, async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile', 'multiSelections'],
+      filters: [
+        { name: 'Media Files', extensions: ['mp4', 'mov', 'mkv', 'jpg', 'jpeg', 'png'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    })
+    return result.canceled ? [] : result.filePaths
+  })
+
+  // --- Project ---
+  ipcMain.handle(IPC_CHANNELS.PROJECT_LIST, async () => {
+    return projectService.getProjects()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.PROJECT_GET, async (_, projectId: string) => {
+    return projectService.getProject(projectId)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.PROJECT_CREATE, async (_, dto: CreateProjectDTO) => {
+    return projectService.createProject(dto)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.PROJECT_DELETE, async (_, projectId: string) => {
+    return projectService.deleteProject(projectId)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.PROJECT_STATS, async (_, projectId: string) => {
+    return projectService.getProjectStats(projectId)
+  })
+
+  // --- Version ---
+  ipcMain.handle(IPC_CHANNELS.VERSION_LIST, async (_, projectId: string) => {
+    return versionService.getVersions(projectId)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.VERSION_CREATE, async (_, dto: CreateVersionDTO) => {
+    return versionService.createVersion(dto)
+  })
+
+  // --- Review Comments ---
+  ipcMain.handle(
+    IPC_CHANNELS.COMMENT_LIST,
+    async (_, { projectId, versionId }: { projectId: string; versionId: string }) => {
+      return reviewService.getComments(projectId, versionId)
+    }
+  )
+
+  ipcMain.handle(IPC_CHANNELS.COMMENT_CREATE, async (_, dto: CreateCommentDTO) => {
+    return reviewService.createComment(dto)
+  })
+
+  ipcMain.handle(
+    IPC_CHANNELS.COMMENT_UPDATE_STATUS,
+    async (_, dto: UpdateCommentStatusDTO & { projectId: string }) => {
+      return reviewService.updateStatus(dto)
+    }
+  )
+
+  ipcMain.handle(
+    IPC_CHANNELS.COMMENT_DELETE,
+    async (_, { projectId, commentId }: { projectId: string; commentId: string }) => {
+      return reviewService.deleteComment(projectId, commentId)
+    }
+  )
+
+  // --- Source ---
+  ipcMain.handle(IPC_CHANNELS.SOURCE_LIST, async (_, projectId: string) => {
+    return sourceService.getSources(projectId)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.SOURCE_IMPORT, async (_, dto: ImportSourceDTO) => {
+    return sourceService.importSource(dto)
+  })
+
+  // --- Package Export ---
+  ipcMain.handle(IPC_CHANNELS.PACKAGE_CREATE, async (_, dto: CreateRevisionPackageDTO) => {
+    return exportService.createPackage(dto)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.PACKAGE_OPEN_FOLDER, async (_, folderPath: string) => {
+    await shell.openPath(folderPath)
+    return true
+  })
+}
