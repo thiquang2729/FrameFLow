@@ -18,6 +18,8 @@ interface DrawingToolbarProps {
   setCurrentColor: (color: string) => void
   strokeWidth: number
   setStrokeWidth: (width: number) => void
+  fontSize?: number
+  setFontSize?: (size: number) => void
   onUndo: () => void
   onRedo?: () => void
   canUndo: boolean
@@ -31,6 +33,8 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
   setCurrentColor,
   strokeWidth,
   setStrokeWidth,
+  fontSize = 24,
+  setFontSize,
   onUndo,
   onRedo,
   canUndo,
@@ -54,12 +58,6 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
     '#ec4899', // Pink
     '#ffffff', // White
     '#0f172a'  // Dark/Black
-  ]
-
-  const strokeSizes = [
-    { width: 2, label: 'Nhỏ', sizeClass: 'w-2 h-2' },
-    { width: 4, label: 'Vừa', sizeClass: 'w-3 h-3' },
-    { width: 6, label: 'Lớn', sizeClass: 'w-4 h-4' }
   ]
 
   return (
@@ -140,28 +138,32 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
           </div>
         </div>
 
-        {/* Stroke Sizes */}
+        {/* Stroke / Font Size Slider */}
         <div className="flex items-center gap-2 justify-end">
-          <span className="text-[11px] font-semibold text-slate-500">Nét</span>
-          <div className="flex items-center gap-1.5 justify-end">
-            {strokeSizes.map((s) => (
-              <button
-                key={s.width}
-                type="button"
-                onClick={() => setStrokeWidth(s.width)}
-                className={`w-6 h-6 rounded-lg flex items-center justify-center border transition-all ${
-                  strokeWidth === s.width
-                    ? 'bg-blue-50 border-blue-500 text-blue-600 shadow-2xs'
-                    : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
-                }`}
-                title={s.label}
-              >
-                <span
-                  className={`${s.sizeClass} rounded-full`}
-                  style={{ backgroundColor: strokeWidth === s.width ? '#2563eb' : '#64748b' }}
-                />
-              </button>
-            ))}
+          <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">
+            {currentTool === 'TEXT' ? 'Cỡ chữ' : 'Nét'}
+          </span>
+          <div className="flex items-center gap-2">
+            <input
+              aria-label={currentTool === 'TEXT' ? 'Kích thước cỡ chữ' : 'Độ dày nét vẽ'}
+              type="range"
+              min={currentTool === 'TEXT' ? 12 : 1}
+              max={currentTool === 'TEXT' ? 72 : 20}
+              step="1"
+              value={currentTool === 'TEXT' ? fontSize : strokeWidth}
+              onChange={(e) => {
+                const val = Number(e.target.value)
+                if (currentTool === 'TEXT') {
+                  setFontSize?.(val)
+                } else {
+                  setStrokeWidth(val)
+                }
+              }}
+              className="w-24 sm:w-28 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+            />
+            <span className="text-[11px] font-mono text-slate-500 w-8 text-right select-none">
+              {currentTool === 'TEXT' ? fontSize : strokeWidth}px
+            </span>
           </div>
         </div>
       </div>

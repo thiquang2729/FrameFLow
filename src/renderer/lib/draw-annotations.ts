@@ -24,18 +24,25 @@ export function drawAnnotations(context: CanvasRenderingContext2D, annotations: 
     } else if (annotation.type === 'ARROW' && data.points?.length === 4) {
       const [x1, y1, x2, y2] = data.points
       const sx = x1 * width, sy = y1 * height, ex = x2 * width, ey = y2 * height
-      const angle = Math.atan2(ey - sy, ex - sx)
-      const head = (12 + data.strokeWidth) * scale
-      context.beginPath()
-      context.moveTo(sx, sy)
-      context.lineTo(ex, ey)
-      context.stroke()
-      context.beginPath()
-      context.moveTo(ex, ey)
-      context.lineTo(ex - head * Math.cos(angle - Math.PI / 6), ey - head * Math.sin(angle - Math.PI / 6))
-      context.lineTo(ex - head * Math.cos(angle + Math.PI / 6), ey - head * Math.sin(angle + Math.PI / 6))
-      context.closePath()
-      context.fill()
+      const dx = ex - sx, dy = ey - sy
+      const dist = Math.hypot(dx, dy)
+      if (dist > 0) {
+        const angle = Math.atan2(dy, dx)
+        const head = Math.min(dist * 0.75, (14 + data.strokeWidth * 2.5) * scale)
+        const shaftDist = Math.max(0, dist - head * 0.5)
+        const shaftX = sx + Math.cos(angle) * shaftDist
+        const shaftY = sy + Math.sin(angle) * shaftDist
+        context.beginPath()
+        context.moveTo(sx, sy)
+        context.lineTo(shaftX, shaftY)
+        context.stroke()
+        context.beginPath()
+        context.moveTo(ex, ey)
+        context.lineTo(ex - head * Math.cos(angle - Math.PI / 6), ey - head * Math.sin(angle - Math.PI / 6))
+        context.lineTo(ex - head * Math.cos(angle + Math.PI / 6), ey - head * Math.sin(angle + Math.PI / 6))
+        context.closePath()
+        context.fill()
+      }
     } else if (data.x !== undefined && data.y !== undefined) {
       const x = data.x * width, y = data.y * height
       const w = (data.width ?? 0) * width, h = (data.height ?? 0) * height
