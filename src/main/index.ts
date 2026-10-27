@@ -1,5 +1,6 @@
 import { app, BrowserWindow, protocol, net } from 'electron'
 import { join } from 'path'
+import fs from 'fs'
 import { is } from '@electron-toolkit/utils'
 import { ProjectService } from './services/project.service'
 import { VersionService } from './services/version.service'
@@ -11,6 +12,10 @@ import { registerIpcHandlers } from './ipc/register-ipc'
 let mainWindow: BrowserWindow | null = null
 
 function createWindow(): void {
+  const preloadPath = fs.existsSync(join(__dirname, '../preload/index.mjs'))
+    ? join(__dirname, '../preload/index.mjs')
+    : join(__dirname, '../preload/index.js')
+
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -21,7 +26,7 @@ function createWindow(): void {
     title: 'FrameFlow — AI-assisted Video Review Workspace',
     backgroundColor: '#0d1117',
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
+      preload: preloadPath,
       sandbox: false,
       webSecurity: false // Allows streaming local video and local frame snapshots
     }

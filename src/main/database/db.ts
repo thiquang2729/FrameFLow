@@ -14,7 +14,14 @@ export class DatabaseManager {
 
   public static async getSqlEngine(): Promise<SqlJsStatic> {
     if (!SQL) {
-      SQL = await initSqlJs()
+      try {
+        const wasmPath = require.resolve('sql.js/dist/sql-wasm.wasm')
+        SQL = await initSqlJs({
+          locateFile: () => wasmPath
+        })
+      } catch {
+        SQL = await initSqlJs()
+      }
     }
     return SQL
   }
