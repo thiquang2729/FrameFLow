@@ -9,6 +9,8 @@ Quy ước đặt phiên bản tuân theo [Semantic Versioning](https://semver.o
 ## [Unreleased]
 
 ### Added
+- M4 trên nhánh `dev`: tự capture JPEG khi tạo bình luận; vẽ arrow/rect/ellipse/text, undo/redo, màu và kích thước; lưu annotation JSON + PNG riêng, đọc lại cùng bình luận.
+- Kiểm thử geometry ngang/dọc/4K, capture/callback/fallback và lưu media/annotation qua restart.
 - Nối Review Workspace với SQLite/IPC thật: chọn phiên bản, player và phím tắt, tạo bình luận theo timestamp, lọc/trạng thái và timeline markers.
 - Kiểm thử ReviewService bằng SQLite: lưu/mở lại, cách ly phiên bản, validation, frame 0, ID sau xóa và cập nhật trạng thái.
 
@@ -16,6 +18,7 @@ Quy ước đặt phiên bản tuân theo [Semantic Versioning](https://semver.o
 - Giao diện dành cho một người dùng local: bỏ hồ sơ tài khoản giả, nhóm/avatar/thêm thành viên, tên tác giả bình luận và thông báo giả; đổi chia sẻ thành xuất gói phản hồi. Không yêu cầu đăng nhập.
 
 ### Fixed
+- Transaction cho lưu review + attachments + annotation; ghi SQLite qua tệp tạm và dọn ảnh mới khi lưu thất bại. Filename media có suffix ULID, không ghi đè ảnh cũ khi tái sử dụng review ID.
 - Tránh ID bình luận trùng khi xóa một bình luận giữa danh sách; xác thực quan hệ project/version và dữ liệu feedback ở backend.
 
 ## [0.1.0] - 2026-10-27

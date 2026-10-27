@@ -7,6 +7,7 @@ let SQL: SqlJsStatic | null = null
 export class DatabaseManager {
   private db: Database | null = null
   private dbPath: string
+  private inTransaction = false
 
   constructor(dbPath: string) {
     this.dbPath = dbPath
@@ -258,10 +259,37 @@ export class DatabaseManager {
   }
 
   public persist(): void {
-    if (!this.db) return
+    if (!this.db || this.inTransaction) return
     const data = this.db.export()
     const buffer = Buffer.from(data)
-    fs.writeFileSync(this.dbPath, buffer)
+    const temporaryPath = `${this.dbPath}.tmp`
+    try {
+      fs.writeFileSync(temporaryPath, buffer)
+      fs.renameSync(temporaryPath, this.dbPath)
+    } finally {
+      if (fs.existsSync(temporaryPath)) fs.unlinkSync(temporaryPath)
+    }
+  }
+
+  // Synchronous operations only: commit the whole review and its relations once.
+  public transaction<T>(operation: () => T): T {
+    if (!this.db || !SQL) throw new Error('Database not initialized')
+    if (this.inTransaction) throw new Error('Nested transactions are not supported')
+    const snapshot = this.db.export()
+    this.db.run('BEGIN TRANSACTION')
+    this.inTransaction = true
+    try {
+      const result = operation()
+      this.db.run('COMMIT')
+      this.inTransaction = false
+      this.persist()
+      return result
+    } catch (error) {
+      this.inTransaction = false
+      this.db.close()
+      this.db = new SQL.Database(snapshot)
+      throw error
+    }
   }
 
   public run(sql: string, params: (string | number | null | undefined)[] = []): void {

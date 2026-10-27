@@ -665,7 +665,11 @@ FrameFlow/
 - Backend kiểm tra project–version, timestamp, nội dung, enums; sửa ID trùng khi xóa bình luận giữa danh sách và giữ frame 0.
 - **Yêu cầu xác nhận:** ứng dụng local cho một người; không đăng nhập/tài khoản, nhóm, mời thành viên, chia sẻ cộng tác hay nhiều tác giả bình luận. Đã bỏ profile giả, avatar, nhóm và tên tác giả trên UI. Giữ field `created_by` hiện có để tương thích dữ liệu, không dùng làm hệ thống tài khoản.
 - Kiểm thử tự động: `pnpm test` (ReviewService với SQLite thật: persistence khi mở lại, tách version, sort, frame 0, ID sau xóa, validation và trạng thái).
-- **Bước tiếp theo:** M4 — capture frame tự động khi tạo bình luận, nối AnnotationCanvas/toolbar với ảnh thật và lưu annotation. Filmstrip thumbnail của TASK-PLY-003 và kiểm thử thao tác trực tiếp trong Electron vẫn chưa hoàn tất; chưa đánh dấu toàn bộ M3/MVP Done.
+- **M4 đã triển khai trên `dev`:** tạo bình luận tự chụp JPEG ở resolution gốc; ưu tiên timestamp từ `requestVideoFrameCallback`, fallback frame đã decode nếu video pause không phát callback. Nối canvas ảnh thật với arrow/rect/ellipse/text, màu/kích thước, undo/redo; lưu object JSON và PNG riêng, mở lại bình luận render annotation từ JSON. Ảnh gốc không bị ghi đè.
+- Canvas dùng Canvas 2D hiện có thay vì chuyển sang Konva; tọa độ chuẩn hóa 0–1, stroke/font scale theo chiều rộng frame, giữ aspect ratio ảnh dọc/ngang/4K. Text nhập bằng input trong UI (không dùng `window.prompt` của Electron).
+- Lưu review/attachments/annotations trong một transaction; ghi database qua tệp tạm rồi rename, dọn ảnh mới khi lưu lỗi. Mỗi ảnh có suffix ULID để tránh ghi đè khi review ID được tái sử dụng.
+- Git workflow: `main` giữ baseline `6beff8c`; phát triển tính năng trên `dev`, chỉ merge sau khi kiểm tra workflow trực tiếp.
+- **Bước tiếp theo:** kiểm thử M4 trực tiếp trong Electron theo checklist bên dưới, rồi M5 — SRC Library Basic với dữ liệu thật. Filmstrip thumbnail của TASK-PLY-003 và kiểm thử thao tác trực tiếp trong Electron vẫn chưa hoàn tất; chưa đánh dấu toàn bộ M3/M4/MVP Done.
 
 #### Checklist kiểm tra trực tiếp Review Core
 
@@ -675,6 +679,15 @@ FrameFlow/
 4. Click bình luận/marker → video seek; đổi trạng thái → lọc theo trạng thái.
 5. Đổi phiên bản/dự án → không lẫn bình luận; khởi động lại app → dữ liệu còn nguyên.
 6. Thử phiên bản không có tệp hoặc codec không hỗ trợ → hiển thị lỗi; dự án chưa có video/bình luận → empty state, không dùng dữ liệu mẫu trong Review.
+
+#### Checklist kiểm tra trực tiếp Capture & Annotation (M4)
+
+1. Mở video, seek và đợi frame → C hoặc D → kiểm tra JPEG preview khớp hình và timestamp.
+2. Vẽ arrow/rectangle/ellipse; chọn Text, nhập nội dung rồi click để đặt. Thử kéo ra ngoài canvas, undo/redo, đổi màu và kích thước.
+3. Lưu → kiểm tra `frames/` có JPEG gốc, `annotations/` có PNG; mở bình luận sau app restart vẫn có drawing JSON như trước.
+4. Thử video dọc, 720p, 1080p và 4K → ảnh không kéo giãn, annotation khớp PNG xuất.
+5. Hủy khi đang soạn → không tạo file/record; bình luận cũ không có ảnh → hiển thị thông báo phù hợp.
+6. Kiểm thử tự động qua `pnpm test`: persistence JSON/media, rollback khi lỗi SQL/ảnh/ghi DB, geometry nhiều resolution, capture/callback/fallback. Chưa thay thế được kiểm tra hình ảnh thực tế trong Electron.
 
 ### Milestone 1: Foundation (TASK-FND)
 

@@ -1,7 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Maximize, MessageSquare, Pause, Play, Plus, SkipBack, SkipForward } from 'lucide-react'
-import { CommentCategory, CommentPriority, CommentStatus, EditVersion, Project, ReviewComment } from '@shared/types'
+import { Annotation, AnnotationType, CommentCategory, CommentPriority, CommentStatus, EditVersion, Project, ReviewComment } from '@shared/types'
 import { useProjectStore } from '../stores/project.store'
+import { AnnotationCanvas } from '../components/review/AnnotationCanvas'
+import { DrawingToolbar } from '../components/review/DrawingToolbar'
+import { captureFrame } from '../lib/capture-frame'
 
 const categories: Record<CommentCategory, string> = {
   SUBTITLE: 'Phụ đề', PACING: 'Nhịp dựng', AUDIO: 'Âm thanh', COLOR: 'Màu sắc',
@@ -79,6 +82,7 @@ function VersionReview({ project, version }: { project: Project; version: EditVe
   const textRef = useRef<HTMLTextAreaElement>(null)
   const mounted = useRef(true)
   const busy = useRef(false)
+  const canvasRef = useRef<{ getAnnotatedBase64: () => string | null }>(null)
   const [comments, setComments] = useState<ReviewComment[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -95,6 +99,19 @@ function VersionReview({ project, version }: { project: Project; version: EditVe
   const [category, setCategory] = useState<CommentCategory>('GENERAL')
   const [priority, setPriority] = useState<CommentPriority>('MEDIUM')
   const [saving, setSaving] = useState(false)
+  const [capturing, setCapturing] = useState(false)
+  const [frame, setFrame] = useState<string | null>(null)
+  const [history, setHistory] = useState<Annotation[][]>([[]])
+  const [historyIndex, setHistoryIndex] = useState(0)
+  const [tool, setTool] = useState<AnnotationType>('ARROW')
+  const [color, setColor] = useState('#ef4444')
+  const [strokeWidth, setStrokeWidth] = useState(4)
+  const [text, setText] = useState('')
+  const annotations = history[historyIndex]
+  const changeAnnotations = (next: Annotation[]) => {
+    setHistory((items) => [...items.slice(0, historyIndex + 1), next])
+    setHistoryIndex(historyIndex + 1)
+  }
   const selected = comments.find((item) => item.id === selectedId)
   const visibleComments = comments.filter((item) => filter === 'ALL' || item.status === filter)
 
@@ -122,25 +139,47 @@ function VersionReview({ project, version }: { project: Project; version: EditVe
     else video.pause()
   }
 
-  const startComment = () => {
+  const startComment = async () => {
     const video = videoRef.current
     if (!video || !ready || video.seeking || draftTime !== null || busy.current || loading) return
     video.pause()
+    busy.current = true
+    setCapturing(true)
     setDraftTime(video.currentTime)
+    setFrame(null)
+    setHistory([[]])
+    setHistoryIndex(0)
     setContent('')
     setSelectedId(null)
     setError('')
+    try {
+      const captured = await captureFrame(video)
+      if (!mounted.current) return
+      setFrame(captured.base64)
+      setDraftTime(captured.timestamp)
+    } catch (err) {
+      if (mounted.current) {
+        setDraftTime(null)
+        setError(err instanceof Error ? err.message : 'Không thể chụp frame.')
+      }
+    } finally {
+      busy.current = false
+      if (mounted.current) setCapturing(false)
+    }
   }
 
   const saveComment = async () => {
-    if (draftTime === null || !content.trim() || busy.current) return
+    if (draftTime === null || !frame || !content.trim() || busy.current) return
     busy.current = true
     setSaving(true)
     setError('')
     try {
+      const annotatedFrameBase64 = annotations.length ? canvasRef.current?.getAnnotatedBase64() : undefined
+      if (annotations.length && !annotatedFrameBase64) throw new Error('Annotation chưa sẵn sàng')
       const comment: ReviewComment = await window.api.createComment({
         projectId: project.id, editVersionId: version.id, timestamp: draftTime,
-        frameNumber: Math.round(draftTime * (version.fps || 30)), category, priority, content: content.trim()
+        frameNumber: Math.round(draftTime * (version.fps || 30)), category, priority, content: content.trim(),
+        frameBase64: frame, annotations, annotatedFrameBase64: annotatedFrameBase64 || undefined
       })
       if (!mounted.current) return
       setComments((list) => [...list, comment].sort((a, b) => a.timestamp - b.timestamp))
@@ -148,6 +187,9 @@ function VersionReview({ project, version }: { project: Project; version: EditVe
       setFilter('ALL')
       setDraftTime(null)
       setContent('')
+      setFrame(null)
+      setHistory([[]])
+      setHistoryIndex(0)
       await refreshStats()
     } catch {
       if (mounted.current) setError('Không thể lưu bình luận. Nội dung vẫn được giữ để thử lại.')
@@ -188,14 +230,14 @@ function VersionReview({ project, version }: { project: Project; version: EditVe
         return
       }
       if (editing || event.ctrlKey || event.metaKey || event.altKey) return
-      if (event.key === 'Escape' && !saving) { setDraftTime(null); return }
+      if (event.key === 'Escape' && !saving && !capturing) { setDraftTime(null); return }
       if (draftTime !== null) {
         const choice: Record<string, CommentPriority> = { '1': 'LOW', '2': 'MEDIUM', '3': 'HIGH' }
         if (choice[event.key]) setPriority(choice[event.key])
         return
       }
       if (event.code === 'Space') { event.preventDefault(); togglePlay() }
-      else if (event.key.toLowerCase() === 'c') { event.preventDefault(); startComment() }
+      else if (event.key.toLowerCase() === 'c' || event.key.toLowerCase() === 'd') { event.preventDefault(); void startComment() }
       else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
         event.preventDefault()
         const direction = event.key === 'ArrowLeft' ? -1 : 1
@@ -260,14 +302,22 @@ function VersionReview({ project, version }: { project: Project; version: EditVe
             <p className="text-[10px] text-slate-400">Space: phát/dừng · C: bình luận · ←/→: frame · Shift+←/→: 5 giây · Frame ước tính ({version.fps || 30} fps)</p>
           </div>
         </main>
-        <aside className="w-72 shrink-0 overflow-y-auto border-l border-slate-200 bg-white p-4 space-y-4">
+        <aside className="w-96 shrink-0 overflow-y-auto border-l border-slate-200 bg-white p-4 space-y-4">
           <h2 className="font-bold text-sm">Ghi chú duyệt</h2>
           {draftTime !== null ? <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void saveComment() }}>
             <p className="font-mono text-xs">{formatTime(draftTime)} · Frame ~{Math.round(draftTime * (version.fps || 30))}</p>
             <label className="block text-xs space-y-1"><span>Danh mục</span><select className={inputClass} value={category} disabled={saving} onChange={(event) => setCategory(event.target.value as CommentCategory)}>{Object.entries(categories).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
             <label className="block text-xs space-y-1"><span>Mức ưu tiên</span><select className={inputClass} value={priority} disabled={saving} onChange={(event) => setPriority(event.target.value as CommentPriority)}>{Object.entries(priorities).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
             <label className="block text-xs space-y-1"><span>Nội dung phản hồi</span><textarea ref={textRef} className={inputClass} rows={7} required value={content} disabled={saving} onChange={(event) => setContent(event.target.value)} /></label>
-            <div className="flex gap-2"><button type="button" className={buttonClass} disabled={saving} onClick={() => setDraftTime(null)}>Hủy</button><button type="submit" disabled={saving || !content.trim()} className={`${buttonClass} bg-blue-600 text-white hover:bg-blue-700`}>{saving ? 'Đang lưu...' : 'Lưu bình luận'}</button></div>
+            {capturing && <p role="status" className="text-xs text-slate-500">Đang chụp frame...</p>}
+            {frame && <fieldset disabled={saving} className="space-y-3">
+              <legend className="text-xs font-semibold mb-2">Frame gốc & annotation</legend>
+              <AnnotationCanvas ref={canvasRef} imageSrc={frame} annotations={annotations} onAnnotationsChange={changeAnnotations} currentTool={tool} currentColor={color} strokeWidth={strokeWidth} textContent={text} readOnly={saving} />
+              <DrawingToolbar currentTool={tool} setCurrentTool={setTool} currentColor={color} setCurrentColor={setColor} strokeWidth={strokeWidth} setStrokeWidth={setStrokeWidth}
+                onUndo={() => setHistoryIndex((index) => Math.max(0, index - 1))} onRedo={() => setHistoryIndex((index) => Math.min(history.length - 1, index + 1))} canUndo={historyIndex > 0} canRedo={historyIndex < history.length - 1} />
+              {tool === 'TEXT' && <label className="block text-xs space-y-1"><span>Nhập chữ rồi click lên frame để đặt</span><input className={inputClass} value={text} onChange={(event) => setText(event.target.value)} placeholder="Nội dung annotation..." /></label>}
+            </fieldset>}
+            <div className="flex gap-2"><button type="button" className={buttonClass} disabled={saving || capturing} onClick={() => { setDraftTime(null); setFrame(null) }}>Hủy</button><button type="submit" disabled={saving || capturing || !frame || !content.trim()} className={`${buttonClass} bg-blue-600 text-white hover:bg-blue-700`}>{saving ? 'Đang lưu...' : 'Lưu bình luận'}</button></div>
             <p className="text-[10px] text-slate-400">Ctrl+Enter: lưu · Mốc thời gian được giữ cố định trong khi nhập.</p>
           </form> : <>
             <button className={`${buttonClass} flex items-center gap-2`} disabled={!ready || loading || saving} onClick={startComment}><Plus size={14} />Thêm bình luận (C)</button>
@@ -275,6 +325,10 @@ function VersionReview({ project, version }: { project: Project; version: EditVe
               <p className="font-mono text-blue-600">{selected.id} · {formatTime(selected.timestamp)}</p>
               <p>{categories[selected.category]} · Ưu tiên: {priorities[selected.priority]}</p>
               <p className="whitespace-pre-wrap break-words leading-relaxed">{selected.content}</p>
+              {selected.attachments?.find((attachment) => attachment.type === 'FRAME') ? <AnnotationCanvas key={selected.id}
+                imageSrc={fileUrl(`${project.projectPath}/${selected.attachments.find((attachment) => attachment.type === 'FRAME')!.filePath}`)}
+                annotations={selected.annotations || []} currentTool="ARROW" currentColor="#ef4444" strokeWidth={4} readOnly />
+                : <p className="text-slate-400">Bình luận cũ chưa có frame đính kèm.</p>}
               <label className="block space-y-1"><span>Trạng thái</span><select className={inputClass} disabled={saving} value={selected.status} onChange={(event) => { void updateStatus(event.target.value as CommentStatus) }}>{Object.entries(statuses).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
               <p className="text-slate-400">{new Date(selected.createdAt).toLocaleString('vi-VN')}</p>
             </div> : <p className="text-xs text-slate-500">Chọn bình luận để xem chi tiết hoặc tạm dừng video để ghi nhận phản hồi.</p>}

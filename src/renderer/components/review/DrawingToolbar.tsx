@@ -1,6 +1,5 @@
 import React from 'react'
 import {
-  Pen,
   MoveRight,
   Square,
   Circle,
@@ -36,7 +35,6 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
   canRedo = false
 }) => {
   const tools = [
-    { id: 'RECT' as AnnotationType, label: 'Bút', icon: Pen },
     { id: 'ARROW' as AnnotationType, label: 'Mũi tên', icon: MoveRight },
     { id: 'RECT' as AnnotationType, label: 'Hình chữ nhật', icon: Square },
     { id: 'CIRCLE' as AnnotationType, label: 'Hình tròn', icon: Circle },
@@ -67,10 +65,10 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
       </div>
 
       {/* Tool Buttons Row */}
-      <div className="grid grid-cols-7 gap-1.5">
+      <div className="grid grid-cols-6 gap-1.5">
         {tools.map((t, idx) => {
           const Icon = t.icon
-          const isSelected = currentTool === t.id && (idx !== 0 || currentTool === 'RECT')
+          const isSelected = currentTool === t.id
           return (
             <button
               key={idx}
@@ -124,6 +122,8 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
               <button
                 key={c}
                 type="button"
+                aria-label={`Màu ${c}`}
+                aria-pressed={currentColor === c}
                 onClick={() => setCurrentColor(c)}
                 className={`w-5 h-5 rounded-full transition-all border ${
                   c === '#ffffff' ? 'border-slate-300' : 'border-transparent'
