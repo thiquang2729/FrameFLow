@@ -1,730 +1,286 @@
 import React, { useEffect, useRef, useState } from 'react'
-import {
-  Play,
-  Pause,
-  SkipBack,
-  SkipForward,
-  Plus,
-  MessageSquare,
-  Volume2,
-  Maximize,
-  ChevronDown,
-  Upload,
-  ChevronLeft,
-  ChevronRight,
-  MoreVertical,
-  Clock,
-  ArrowUp,
-  Trash2,
-  Check,
-  Smile,
-  Send,
-  Layers
-} from 'lucide-react'
+import { Maximize, MessageSquare, Pause, Play, Plus, SkipBack, SkipForward } from 'lucide-react'
+import { CommentCategory, CommentPriority, CommentStatus, EditVersion, Project, ReviewComment } from '@shared/types'
 import { useProjectStore } from '../stores/project.store'
-import {
-  Annotation,
-  AnnotationType,
-  CommentCategory,
-  CommentPriority,
-  CommentStatus,
-  CreateCommentDTO,
-  EditVersion,
-  ReviewComment
-} from '@shared/types'
-import { AnnotationCanvas } from '../components/review/AnnotationCanvas'
-import { DrawingToolbar } from '../components/review/DrawingToolbar'
 
-interface MockReviewItem {
-  id: string
-  timestamp: string
-  secs: number
-  title: string
-  desc: string
-  author: string
-  avatar: string
-  avatarBg: string
-  replies: number
-  category: string
-  priority: string
-  status: string
-  thumbnail: string
-  annotatedImage: string
+const categories: Record<CommentCategory, string> = {
+  SUBTITLE: 'Phụ đề', PACING: 'Nhịp dựng', AUDIO: 'Âm thanh', COLOR: 'Màu sắc',
+  CUT: 'Nhịp cắt', EFFECT: 'Hiệu ứng', GRAPHICS: 'Đồ họa', GENERAL: 'Chung'
+}
+const priorities: Record<CommentPriority, string> = {
+  LOW: 'Thấp', MEDIUM: 'Trung bình', HIGH: 'Cao', CRITICAL: 'Khẩn cấp'
+}
+const statuses: Record<CommentStatus, string> = {
+  OPEN: 'Đang mở', IN_PROGRESS: 'Đang xử lý', FIXED: 'Đã sửa', PARTIAL: 'Sửa một phần', REJECTED: 'Từ chối'
+}
+const inputClass = 'w-full rounded-lg border border-slate-200 bg-white p-2 text-xs disabled:opacity-50'
+const buttonClass = 'rounded-lg border border-slate-200 px-3 py-2 text-xs hover:bg-slate-50 disabled:opacity-40'
+
+function formatTime(seconds: number): string {
+  const ms = Math.max(0, Math.round((Number.isFinite(seconds) ? seconds : 0) * 1000))
+  return `${String(Math.floor(ms / 60000)).padStart(2, '0')}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}.${String(ms % 1000).padStart(3, '0')}`
 }
 
-const sampleReviews: MockReviewItem[] = [
-  {
-    id: '1',
-    timestamp: '00:05.120',
-    secs: 5.12,
-    title: 'Phần mở đầu chưa đủ cuốn hút',
-    desc: 'Phần mở đầu đang thiếu sức hút, cần tạo sự chú ý mạnh hơn ngay từ những giây đầu tiên...',
-    author: 'Maya Chen',
-    avatar: 'MK',
-    avatarBg: 'bg-[#c29d72]',
-    replies: 2,
-    category: 'Nhịp cắt',
-    priority: 'Cao',
-    status: 'Đang mở',
-    thumbnail: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
-    annotatedImage: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80'
-  },
-  {
-    id: '2',
-    timestamp: '00:17.420',
-    secs: 17.42,
-    title: 'Phụ đề che mặt',
-    desc: 'Phụ đề đang che mất khuôn mặt của nhân vật. Hãy di chuyển phụ đề xuống thấp hơn và giảm nhẹ độ mờ.',
-    author: 'Maya Chen',
-    avatar: 'MK',
-    avatarBg: 'bg-[#c29d72]',
-    replies: 3,
-    category: 'Phụ đề',
-    priority: 'Cao',
-    status: 'Đang mở',
-    thumbnail: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
-    annotatedImage: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80'
-  },
-  {
-    id: '3',
-    timestamp: '00:28.310',
-    secs: 28.31,
-    title: 'Nhịp cắt hơi chậm',
-    desc: 'Nhịp cắt của cảnh này hơi chậm. Hãy rút ngắn lại một chút để tăng sự liền mạch...',
-    author: 'Jordan Dell',
-    avatar: 'JD',
-    avatarBg: 'bg-blue-600',
-    replies: 1,
-    category: 'Nhịp cắt',
-    priority: 'Trung bình',
-    status: 'Đang mở',
-    thumbnail: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=200&q=80',
-    annotatedImage: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=600&q=80'
-  },
-  {
-    id: '4',
-    timestamp: '00:35.100',
-    secs: 35.1,
-    title: 'Cảnh quay quá tối',
-    desc: 'Cảnh này thiếu sáng, khó thấy chi tiết trong khung hình. Có thể tăng độ phơi sáng...',
-    author: 'Alex Lee',
-    avatar: 'AL',
-    avatarBg: 'bg-slate-500',
-    replies: 2,
-    category: 'Màu sắc',
-    priority: 'Cao',
-    status: 'Đã sửa',
-    thumbnail: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=200&q=80',
-    annotatedImage: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=600&q=80'
-  },
-  {
-    id: '5',
-    timestamp: '00:41.800',
-    secs: 41.8,
-    title: 'Hiệu ứng logo đoạn kết',
-    desc: 'Hiệu ứng logo ở đoạn kết cần mượt hơn và giữ lâu hơn một chút để tăng khả năng nhận diện thương hiệu.',
-    author: 'Maya Chen',
-    avatar: 'MK',
-    avatarBg: 'bg-[#c29d72]',
-    replies: 1,
-    category: 'Đồ họa',
-    priority: 'Thấp',
-    status: 'Đã sửa',
-    thumbnail: 'https://images.unsplash.com/photo-1541829070764-84a7d30dd3f3?auto=format&fit=crop&w=200&q=80',
-    annotatedImage: 'https://images.unsplash.com/photo-1541829070764-84a7d30dd3f3?auto=format&fit=crop&w=600&q=80'
-  }
-]
+function fileUrl(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, '/')
+  return encodeURI(normalized.startsWith('//') ? `file:${normalized}` : `file:///${normalized.replace(/^\//, '')}`)
+    .replace(/#/g, '%23').replace(/\?/g, '%3F')
+}
 
 export const ReviewWorkspace: React.FC = () => {
-  const { activeProject, refreshStats, setActiveTab } = useProjectStore()
+  const project = useProjectStore((state) => state.activeProject)
+  if (!project) return <div className="flex-1 p-8 text-slate-500">Chọn một dự án để bắt đầu duyệt video.</div>
+  return <ProjectReview key={project.id} project={project} />
+}
 
-  // Versions
+function ProjectReview({ project }: { project: Project }): React.ReactElement {
+  const setActiveTab = useProjectStore((state) => state.setActiveTab)
   const [versions, setVersions] = useState<EditVersion[]>([])
-  const [selectedVersion, setSelectedVersion] = useState<EditVersion | null>(null)
+  const [versionId, setVersionId] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  // Comments
+  useEffect(() => {
+    let cancelled = false
+    window.api.listVersions(project.id).then((list: EditVersion[]) => {
+      if (cancelled) return
+      setVersions(list)
+      setVersionId(list[list.length - 1]?.id || '')
+    }).catch(() => { if (!cancelled) setError('Không thể tải phiên bản. Hãy mở lại màn hình Review.') })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [project.id])
+
+  const version = versions.find((item) => item.id === versionId)
+  return (
+    <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#f8fafc] text-slate-800">
+      <header className="flex items-center justify-between gap-4 p-4 border-b border-slate-200 bg-white">
+        <div><h1 className="font-bold text-lg">{project.name}</h1><p className="text-xs text-slate-500">Duyệt bản dựng · Phản hồi được lưu riêng theo phiên bản</p></div>
+        <div className="flex items-center gap-2">
+          <select aria-label="Phiên bản đang duyệt" className={inputClass} value={versionId} onChange={(event) => setVersionId(event.target.value)} disabled={!versions.length}>
+            {!versions.length && <option value="">Chưa có bản dựng</option>}
+            {versions.map((item) => <option key={item.id} value={item.id}>V{item.versionNumber} — {item.name}</option>)}
+          </select>
+          <button className={`${buttonClass} whitespace-nowrap`} onClick={() => setActiveTab('versions')}>Nhập bản dựng</button>
+          <button className={`${buttonClass} whitespace-nowrap`} onClick={() => setActiveTab('export')}>Xuất phản hồi</button>
+        </div>
+      </header>
+      {loading ? <p role="status" className="p-8">Đang tải phiên bản...</p>
+        : error ? <p role="alert" className="p-8 text-red-600">{error}</p>
+        : version ? <VersionReview key={version.id} project={project} version={version} />
+        : <div className="flex-1 flex flex-col items-center justify-center gap-3 text-slate-500"><MessageSquare /><p>Nhập video trong mục Phiên bản để bắt đầu review.</p><button className={buttonClass} onClick={() => setActiveTab('versions')}>Đến Phiên bản</button></div>}
+    </div>
+  )
+}
+
+function VersionReview({ project, version }: { project: Project; version: EditVersion }): React.ReactElement {
+  const refreshStats = useProjectStore((state) => state.refreshStats)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const textRef = useRef<HTMLTextAreaElement>(null)
+  const mounted = useRef(true)
+  const busy = useRef(false)
   const [comments, setComments] = useState<ReviewComment[]>([])
-  const [selectedMockIndex, setSelectedMockIndex] = useState(1) // Item 2 default (00:17.420)
-  const [activeComment, setActiveComment] = useState<ReviewComment | null>(null)
-
-  // Video Player state
-  const videoRef = useRef<HTMLVideoElement | null>(null)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [currentTime, setCurrentTime] = useState(17.42)
-  const [duration, setDuration] = useState(48.03)
-
-  // Annotation state
-  const [isCreatingComment, setIsCreatingComment] = useState(false)
-  const [newCommentText, setNewCommentText] = useState('')
-  const [newCategory, setNewCategory] = useState<CommentCategory>('SUBTITLE')
-  const [newPriority, setNewPriority] = useState<CommentPriority>('HIGH')
-  const [capturedFrameBase64, setCapturedFrameBase64] = useState<string | null>(null)
-  const [inProgressAnnotations, setInProgressAnnotations] = useState<Annotation[]>([])
-
-  // Drawing Tools
-  const [currentTool, setCurrentTool] = useState<AnnotationType>('ARROW')
-  const [currentColor, setCurrentColor] = useState<string>('#ef4444')
-  const [strokeWidth, setStrokeWidth] = useState<number>(4)
-  const annotationCanvasRef = useRef<{ getAnnotatedBase64: () => string | null }>(null)
-
-  const loadVersions = async () => {
-    if (!activeProject) return
-    const list = await window.api.listVersions(activeProject.id)
-    setVersions(list)
-    if (list.length > 0 && !selectedVersion) {
-      setSelectedVersion(list[list.length - 1])
-    }
-  }
-
-  const loadComments = async (versionId: string) => {
-    if (!activeProject) return
-    const list = await window.api.listComments(activeProject.id, versionId)
-    setComments(list)
-  }
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [mediaError, setMediaError] = useState('')
+  const [ready, setReady] = useState(false)
+  const [playing, setPlaying] = useState(false)
+  const [time, setTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [volume, setVolume] = useState(1)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [filter, setFilter] = useState('ALL')
+  const [draftTime, setDraftTime] = useState<number | null>(null)
+  const [content, setContent] = useState('')
+  const [category, setCategory] = useState<CommentCategory>('GENERAL')
+  const [priority, setPriority] = useState<CommentPriority>('MEDIUM')
+  const [saving, setSaving] = useState(false)
+  const selected = comments.find((item) => item.id === selectedId)
+  const visibleComments = comments.filter((item) => filter === 'ALL' || item.status === filter)
 
   useEffect(() => {
-    loadVersions()
-  }, [activeProject])
+    mounted.current = true
+    window.api.listComments(project.id, version.id).then((list: ReviewComment[]) => {
+      if (mounted.current) setComments(list)
+    }).catch(() => { if (mounted.current) setError('Không thể tải bình luận. Hãy mở lại phiên bản.') })
+      .finally(() => { if (mounted.current) setLoading(false) })
+    return () => { mounted.current = false }
+  }, [project.id, version.id])
 
-  useEffect(() => {
-    if (selectedVersion) {
-      loadComments(selectedVersion.id)
-    }
-  }, [selectedVersion])
+  const seek = (target: number) => {
+    const video = videoRef.current
+    if (!video || !ready || draftTime !== null) return
+    video.pause()
+    video.currentTime = Math.max(0, Math.min(duration, target))
+    setTime(video.currentTime)
+  }
 
   const togglePlay = () => {
-    if (videoRef.current) {
-      if (videoRef.current.paused) {
-        videoRef.current.play()
-        setIsPlaying(true)
-      } else {
-        videoRef.current.pause()
-        setIsPlaying(false)
+    const video = videoRef.current
+    if (!video || !ready || draftTime !== null) return
+    if (video.paused) void video.play().catch(() => setMediaError('Không phát được video. Kiểm tra tệp hoặc dùng MP4 H.264.'))
+    else video.pause()
+  }
+
+  const startComment = () => {
+    const video = videoRef.current
+    if (!video || !ready || video.seeking || draftTime !== null || busy.current || loading) return
+    video.pause()
+    setDraftTime(video.currentTime)
+    setContent('')
+    setSelectedId(null)
+    setError('')
+  }
+
+  const saveComment = async () => {
+    if (draftTime === null || !content.trim() || busy.current) return
+    busy.current = true
+    setSaving(true)
+    setError('')
+    try {
+      const comment: ReviewComment = await window.api.createComment({
+        projectId: project.id, editVersionId: version.id, timestamp: draftTime,
+        frameNumber: Math.round(draftTime * (version.fps || 30)), category, priority, content: content.trim()
+      })
+      if (!mounted.current) return
+      setComments((list) => [...list, comment].sort((a, b) => a.timestamp - b.timestamp))
+      setSelectedId(comment.id)
+      setFilter('ALL')
+      setDraftTime(null)
+      setContent('')
+      await refreshStats()
+    } catch {
+      if (mounted.current) setError('Không thể lưu bình luận. Nội dung vẫn được giữ để thử lại.')
+    } finally {
+      busy.current = false
+      if (mounted.current) setSaving(false)
+    }
+  }
+
+  const updateStatus = async (status: CommentStatus) => {
+    if (!selected || busy.current) return
+    busy.current = true
+    setSaving(true)
+    setError('')
+    try {
+      await window.api.updateCommentStatus({ projectId: project.id, commentId: selected.id, status })
+      if (!mounted.current) return
+      setComments((list) => list.map((item) => item.id === selected.id ? { ...item, status } : item))
+      await refreshStats()
+    } catch {
+      if (mounted.current) setError('Không thể cập nhật trạng thái. Vui lòng thử lại.')
+    } finally {
+      busy.current = false
+      if (mounted.current) setSaving(false)
+    }
+  }
+
+  useEffect(() => { if (draftTime !== null) textRef.current?.focus() }, [draftTime])
+
+  useEffect(() => {
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing) return
+      const target = event.target as HTMLElement | null
+      const editing = target?.closest('input, textarea, select, button, [contenteditable="true"]')
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && draftTime !== null) {
+        event.preventDefault()
+        void saveComment()
+        return
       }
-    } else {
-      setIsPlaying(!isPlaying)
+      if (editing || event.ctrlKey || event.metaKey || event.altKey) return
+      if (event.key === 'Escape' && !saving) { setDraftTime(null); return }
+      if (draftTime !== null) {
+        const choice: Record<string, CommentPriority> = { '1': 'LOW', '2': 'MEDIUM', '3': 'HIGH' }
+        if (choice[event.key]) setPriority(choice[event.key])
+        return
+      }
+      if (event.code === 'Space') { event.preventDefault(); togglePlay() }
+      else if (event.key.toLowerCase() === 'c') { event.preventDefault(); startComment() }
+      else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        event.preventDefault()
+        const direction = event.key === 'ArrowLeft' ? -1 : 1
+        seek((videoRef.current?.currentTime || 0) + direction * (event.shiftKey ? 5 : 1 / (version.fps || 30)))
+      }
     }
-  }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  })
 
-  const stepFrame = (frames: number) => {
-    if (videoRef.current) {
-      videoRef.current.pause()
-      setIsPlaying(false)
-      const fps = selectedVersion?.fps || 30
-      videoRef.current.currentTime = Math.max(
-        0,
-        Math.min(duration, videoRef.current.currentTime + frames / fps)
-      )
-      setCurrentTime(videoRef.current.currentTime)
-    } else {
-      setCurrentTime((prev) => Math.max(0, Math.min(duration, prev + frames * 0.033)))
-    }
+  const pickComment = (comment: ReviewComment) => {
+    if (draftTime !== null || saving) return
+    setSelectedId(comment.id)
+    seek(comment.timestamp)
   }
-
-  const handleSeek = (time: number) => {
-    setCurrentTime(time)
-    if (videoRef.current) {
-      videoRef.current.currentTime = time
-    }
-  }
-
-  const formatTime = (secs: number) => {
-    const m = Math.floor(secs / 60)
-    const s = Math.floor(secs % 60)
-    const ms = Math.floor((secs % 1) * 1000)
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`
-  }
-
-  const currentMock = sampleReviews[selectedMockIndex] || sampleReviews[0]
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-[#f8fafc] text-slate-800">
-      {/* 1. Top Header Row */}
-      <div className="h-16 px-8 border-b border-slate-200/90 flex items-center justify-between shrink-0 bg-white">
-        <div className="space-y-0.5">
-          <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
-            {activeProject ? activeProject.name : 'UTH Video Quảng Bá'}
-          </h1>
-          <div className="flex items-center gap-2.5 text-xs text-slate-500 font-medium">
-            <span>{activeProject?.targetPlatform || 'Thương hiệu'}</span>
-            <span>•</span>
-            <span>00:45–01:00</span>
-            <span>•</span>
-            <span>{activeProject?.aspectRatio || '16:9'}</span>
-            <span>•</span>
-            <span>v3 (Bản nháp)</span>
-            <span>•</span>
-            <span>Cập nhật 2 giờ trước</span>
+    <>
+      {error && <p role="alert" className="p-3 text-xs text-red-700 bg-red-50">{error}</p>}
+      <div className="flex-1 flex min-h-0 overflow-x-auto">
+        <aside className="w-64 shrink-0 border-r border-slate-200 bg-white flex flex-col">
+          <div className="p-4 border-b space-y-3"><h2 className="text-sm font-bold">Bình luận ({comments.length})</h2>
+            <select aria-label="Lọc trạng thái bình luận" className={inputClass} value={filter} onChange={(event) => setFilter(event.target.value)}>
+              <option value="ALL">Tất cả trạng thái</option>{Object.entries(statuses).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
           </div>
-        </div>
-
-        {/* Header Right Actions */}
-        <div className="flex items-center gap-3">
-          {/* Avatar stack */}
-          <div className="flex items-center -space-x-1.5">
-            <div className="w-7 h-7 rounded-full bg-blue-600 border-2 border-white flex items-center justify-center text-[10px] font-bold text-white shadow-2xs">
-              JD
-            </div>
-            <div className="w-7 h-7 rounded-full bg-[#f59e0b] border-2 border-white flex items-center justify-center text-[10px] font-bold text-white shadow-2xs">
-              MK
-            </div>
-            <div className="w-7 h-7 rounded-full bg-slate-500 border-2 border-white flex items-center justify-center text-[10px] font-bold text-white shadow-2xs">
-              AL
-            </div>
-            <div className="w-7 h-7 rounded-full bg-white border border-slate-300 flex items-center justify-center text-xs text-slate-600 shadow-2xs cursor-pointer hover:bg-slate-50 transition-colors">
-              <Plus className="w-3.5 h-3.5" />
-            </div>
-          </div>
-
-          <button
-            type="button"
-            className="flex items-center gap-2 px-3.5 h-9 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors shadow-2xs"
-          >
-            <Upload className="w-3.5 h-3.5" />
-            <span>Chia sẻ</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('export')}
-            className="flex items-center gap-2 px-4 h-9 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl transition-colors shadow-sm"
-          >
-            <Send className="w-3.5 h-3.5" />
-            <span>Xuất phản hồi</span>
-          </button>
-        </div>
-      </div>
-
-      {/* 2. Main 3-Column Body */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* ======================================================== */}
-        {/* COLUMN 1 (LEFT): Comments List (~290px)                 */}
-        {/* ======================================================== */}
-        <div className="w-76 border-r border-slate-200/90 bg-white flex flex-col shrink-0 select-none">
-          {/* Filter Bar */}
-          <div className="p-3.5 border-b border-slate-200/80 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-900">Bình luận (5)</h2>
-            <button
-              type="button"
-              className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors"
-            >
-              <span>Tất cả bình luận</span>
-              <ChevronDown className="w-3 h-3 text-slate-400" />
-            </button>
-          </div>
-
-          {/* Comment list items */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
-            {sampleReviews.map((item, idx) => {
-              const isSelected = selectedMockIndex === idx
-              return (
-                <div
-                  key={item.id}
-                  onClick={() => {
-                    setSelectedMockIndex(idx)
-                    handleSeek(item.secs)
-                  }}
-                  className={`p-3 rounded-2xl border transition-all cursor-pointer ${
-                    isSelected
-                      ? 'border-blue-500 bg-blue-50/50 ring-1 ring-blue-500/20 shadow-sm'
-                      : 'border-slate-200/80 bg-white hover:bg-slate-50/80 shadow-2xs'
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    {/* Thumbnail */}
-                    <div className="relative w-14 h-11 bg-slate-200 rounded-lg overflow-hidden shrink-0 border border-slate-300">
-                      <img
-                        src={item.thumbnail}
-                        alt="thumb"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono text-[11px] font-semibold text-slate-500">
-                          {item.timestamp}
-                        </span>
-                        <button
-                          type="button"
-                          className="text-slate-400 hover:text-slate-600 transition-colors"
-                        >
-                          <MoreVertical className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                      <p className="text-xs font-bold text-slate-900 truncate mt-0.5">
-                        {item.title}
-                      </p>
-                      <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2 leading-relaxed">
-                        {item.desc}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Footer */}
-                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 text-[11px] text-slate-400">
-                    <div className="flex items-center gap-1.5">
-                      <div
-                        className={`w-4 h-4 rounded-full ${item.avatarBg} text-white flex items-center justify-center text-[8px] font-bold`}
-                      >
-                        {item.avatar}
-                      </div>
-                      <span className="font-medium text-slate-600">{item.author}</span>
-                    </div>
-                    <span>{item.replies} phản hồi</span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* ======================================================== */}
-        {/* COLUMN 2 (CENTER): Player & Pro Timeline                 */}
-        {/* ======================================================== */}
-        <div className="flex-1 flex flex-col bg-[#f8fafc] min-w-0 border-r border-slate-200/90">
-          {/* Top Video Preview Container */}
-          <div className="flex-1 relative flex items-center justify-center p-6 min-h-0 bg-slate-100/50">
-            <div className="relative w-full max-w-4xl aspect-video bg-black rounded-2xl overflow-hidden shadow-md border border-slate-300/80 group">
-              {selectedVersion ? (
-                <video
-                  ref={videoRef}
-                  src={`file:///${selectedVersion.videoPath.replace(/\\/g, '/')}`}
-                  className="w-full h-full object-contain"
-                  controls={false}
-                  onClick={togglePlay}
-                />
-              ) : (
-                <img
-                  src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=1200&q=80"
-                  alt="Video Preview"
-                  className="w-full h-full object-cover"
-                />
-              )}
-
-              {/* In-Frame Subtitle Overlay (Matching mockup "Vì một tương lai tươi sáng cùng nhau") */}
-              <div className="absolute bottom-6 inset-x-0 flex justify-center pointer-events-none">
-                <span className="px-4 py-1.5 bg-black/75 backdrop-blur-xs text-white text-xs font-medium rounded-lg shadow-lg tracking-wide border border-white/10">
-                  Vì một tương lai tươi sáng cùng nhau
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Player Controls Bar */}
-          <div className="h-12 px-6 bg-white border-t border-slate-200/90 flex items-center justify-between shrink-0 select-none">
-            {/* Time Stamp */}
-            <span className="font-mono text-xs font-semibold text-slate-700">
-              {formatTime(currentTime)} / 00:48:030
-            </span>
-
-            {/* Playback Controls */}
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => stepFrame(-1)}
-                className="p-1.5 text-slate-500 hover:text-slate-800 transition-colors"
-                title="Frame trước"
-              >
-                <SkipBack className="w-4 h-4 fill-current" />
-              </button>
-
-              <button
-                type="button"
-                onClick={togglePlay}
-                className="w-8 h-8 rounded-full bg-slate-900 hover:bg-slate-800 text-white flex items-center justify-center shadow-sm transition-all"
-                title="Phát / Tạm dừng"
-              >
-                {isPlaying ? (
-                  <Pause className="w-3.5 h-3.5 fill-current" />
-                ) : (
-                  <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => stepFrame(1)}
-                className="p-1.5 text-slate-500 hover:text-slate-800 transition-colors"
-                title="Frame tiếp"
-              >
-                <SkipForward className="w-4 h-4 fill-current" />
-              </button>
-            </div>
-
-            {/* Right toolbar controls */}
-            <div className="flex items-center gap-3.5 text-slate-600">
-              <Volume2 className="w-4 h-4 cursor-pointer hover:text-slate-900 transition-colors" />
-
-              <div className="flex items-center gap-1 text-xs cursor-pointer hover:text-slate-900">
-                <span>Phù hợp</span>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-              </div>
-
-              <Maximize className="w-4 h-4 cursor-pointer hover:text-slate-900 transition-colors" />
-            </div>
-          </div>
-
-          {/* Professional Multi-Track Timeline */}
-          <div className="h-44 bg-white border-t border-slate-200 flex flex-col shrink-0 select-none">
-            {/* Timeline Ruler */}
-            <div className="h-7 px-28 border-b border-slate-200 flex items-center justify-between text-[11px] font-mono text-slate-400 relative">
-              <span>00:00</span>
-              <span>00:10</span>
-              {/* Playhead marker indicator on ruler */}
-              <div
-                className="absolute -top-1 px-1.5 py-0.5 bg-blue-600 text-white rounded text-[10px] font-mono font-bold shadow-xs -translate-x-1/2 flex flex-col items-center z-20"
-                style={{ left: `${(currentTime / duration) * 100}%` }}
-              >
-                <span>{formatTime(currentTime).slice(0, 8)}</span>
-                <span className="w-0.5 h-2 bg-blue-600 inline-block" />
-              </div>
-              <span>00:30</span>
-              <span>00:40</span>
-            </div>
-
-            {/* Tracks Container */}
-            <div className="flex-1 p-3 space-y-2 relative overflow-hidden">
-              {/* Vertical Playhead Line across all tracks */}
-              <div
-                className="absolute top-0 bottom-0 w-[1.5px] bg-blue-600 z-10 pointer-events-none"
-                style={{ left: `${(currentTime / duration) * 100}%` }}
-              />
-
-              {/* Track 1: Filmstrip Thumbnail Track */}
-              <div className="flex items-center gap-3">
-                <span className="w-20 text-[11px] font-semibold text-slate-400 flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Video</span>
-                </span>
-                <div className="flex-1 h-9 rounded-lg overflow-hidden bg-purple-100/60 border border-purple-200 flex items-center relative">
-                  <div className="absolute inset-y-0 left-0 w-3/4 bg-purple-300/40 border-r-2 border-purple-400 flex items-center px-2">
-                    <span className="text-[10px] font-semibold text-purple-700">Clip_01.mp4</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Track 2: Audio Track */}
-              <div className="flex items-center gap-3">
-                <span className="w-20 text-[11px] font-semibold text-slate-400 flex items-center gap-1.5">
-                  <span className="text-teal-600">✦</span>
-                  <span>Âm thanh</span>
-                </span>
-                <div className="flex-1 h-8 rounded-lg overflow-hidden bg-emerald-50 border border-emerald-200/80 flex items-center px-2">
-                  <svg className="w-full h-4 text-emerald-500 stroke-current fill-none" viewBox="0 0 300 20">
-                    <path
-                      d="M 0 10 Q 15 2, 30 10 T 60 10 T 90 3 T 120 17 T 150 10 T 180 5 T 210 15 T 240 10 T 270 2 T 300 10"
-                      strokeWidth="2"
-                    />
-                  </svg>
-                </div>
-              </div>
-
-              {/* Track 3: Comments Pin Track */}
-              <div className="flex items-center gap-3">
-                <span className="w-20 text-[11px] font-semibold text-slate-400 flex items-center gap-1.5">
-                  <MessageSquare className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Bình luận</span>
-                </span>
-                <div className="flex-1 h-6 relative bg-slate-50 border border-slate-200/60 rounded-lg flex items-center px-1">
-                  {sampleReviews.map((rev) => {
-                    const pct = (rev.secs / duration) * 100
-                    return (
-                      <button
-                        key={rev.id}
-                        type="button"
-                        onClick={() => handleSeek(rev.secs)}
-                        style={{ left: `${pct}%` }}
-                        className="absolute -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-blue-500 hover:scale-125 transition-transform border-2 border-white shadow-2xs"
-                        title={`${rev.timestamp}: ${rev.title}`}
-                      />
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ======================================================== */}
-        {/* COLUMN 3 (RIGHT): Ghi chú duyệt & Drawing (~350px)       */}
-        {/* ======================================================== */}
-        <aside className="w-88 bg-white border-l border-slate-200/90 flex flex-col shrink-0 select-none overflow-y-auto">
-          {/* Header */}
-          <div className="p-4 border-b border-slate-200/80 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-900">Ghi chú duyệt</h2>
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
-                <button
-                  type="button"
-                  onClick={() => setSelectedMockIndex(Math.max(0, selectedMockIndex - 1))}
-                  className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                </button>
-                <span className="font-mono">
-                  {selectedMockIndex + 1} / {sampleReviews.length}
-                </span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSelectedMockIndex(Math.min(sampleReviews.length - 1, selectedMockIndex + 1))
-                  }
-                  className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
-                >
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              <button type="button" className="p-1 text-slate-400 hover:text-slate-600">
-                <MoreVertical className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-
-          <div className="p-4 space-y-4 text-xs">
-            {/* Properties Table */}
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-500 font-medium flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Mốc thời gian</span>
-                </span>
-                <span className="font-mono font-bold text-slate-900">{currentMock.timestamp}</span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-slate-500 font-medium">Danh mục</span>
-                <button
-                  type="button"
-                  className="flex items-center gap-1.5 px-2 py-0.5 bg-purple-50 text-purple-700 font-semibold rounded-md border border-purple-200"
-                >
-                  <span>{currentMock.category}</span>
-                  <ChevronDown className="w-3 h-3 text-purple-400" />
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-slate-500 font-medium">Mức ưu tiên</span>
-                <button
-                  type="button"
-                  className="flex items-center gap-1.5 px-2 py-0.5 bg-red-50 text-red-600 font-bold rounded-md border border-red-200"
-                >
-                  <ArrowUp className="w-3 h-3 text-red-500" />
-                  <span>{currentMock.priority}</span>
-                  <ChevronDown className="w-3 h-3 text-red-400" />
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-slate-500 font-medium">Trạng thái</span>
-                <button
-                  type="button"
-                  className="flex items-center gap-1.5 px-2 py-0.5 bg-red-50 text-red-600 font-bold rounded-md border border-red-200"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
-                  <span>{currentMock.status}</span>
-                  <ChevronDown className="w-3 h-3 text-red-400" />
-                </button>
-              </div>
-            </div>
-
-            {/* Nhận xét Section */}
-            <div className="space-y-1.5 pt-2 border-t border-slate-100">
-              <span className="font-bold text-slate-900">Nhận xét</span>
-              <div className="flex items-center gap-2 mt-1">
-                <div
-                  className={`w-5 h-5 rounded-full ${currentMock.avatarBg} text-white flex items-center justify-center text-[9px] font-bold`}
-                >
-                  {currentMock.avatar}
-                </div>
-                <span className="font-semibold text-slate-800">{currentMock.author}</span>
-                <span className="text-slate-400 text-[11px]">• 2 giờ trước</span>
-              </div>
-              <p className="text-slate-600 leading-relaxed mt-1">{currentMock.desc}</p>
-            </div>
-
-            {/* Annotated Frame Display (Matching Mockup with red box & arrow) */}
-            <div className="relative aspect-video rounded-xl overflow-hidden border border-slate-300 shadow-2xs group">
-              <img
-                src={currentMock.annotatedImage}
-                alt="Annotated Frame"
-                className="w-full h-full object-cover"
-              />
-
-              {/* Subtitle box with drawn red border */}
-              <div className="absolute bottom-4 inset-x-8 h-8 border-2 border-red-500 bg-black/70 flex items-center justify-center">
-                <span className="text-[10px] text-white font-medium">
-                  Vì một tương lai tươi sáng cùng nhau
-                </span>
-              </div>
-
-              {/* Red arrow pointing to subtitle */}
-              <svg className="absolute inset-0 w-full h-full pointer-events-none">
-                <defs>
-                  <marker
-                    id="arrowhead-red"
-                    markerWidth="8"
-                    markerHeight="6"
-                    refX="7"
-                    refY="3"
-                    orient="auto"
-                  >
-                    <polygon points="0 0, 8 3, 0 6" fill="#ef4444" />
-                  </marker>
-                </defs>
-                <line
-                  x1="82%"
-                  y1="38%"
-                  x2="68%"
-                  y2="72%"
-                  stroke="#ef4444"
-                  strokeWidth="3"
-                  markerEnd="url(#arrowhead-red)"
-                />
-              </svg>
-            </div>
-
-            {/* Drawing Toolbar Component */}
-            <DrawingToolbar
-              currentTool={currentTool}
-              setCurrentTool={setCurrentTool}
-              currentColor={currentColor}
-              setCurrentColor={setCurrentColor}
-              strokeWidth={strokeWidth}
-              setStrokeWidth={setStrokeWidth}
-              onUndo={() => {}}
-              canUndo={true}
-            />
-
-            {/* Bottom Actions */}
-            <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-100">
-              <button
-                type="button"
-                className="px-3.5 h-9 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors shadow-2xs"
-              >
-                Hủy
-              </button>
-
-              <button
-                type="button"
-                className="flex items-center gap-1.5 px-3 h-9 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors shadow-2xs"
-              >
-                <MessageSquare className="w-3.5 h-3.5 text-slate-400" />
-                <span>Thêm bình luận</span>
-              </button>
-
-              <button
-                type="button"
-                className="flex items-center gap-1.5 px-3.5 h-9 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-sm transition-colors"
-              >
-                <Check className="w-3.5 h-3.5" />
-                <span>Cập nhật ghi chú</span>
-              </button>
-            </div>
+          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            {loading ? <p role="status" className="text-xs text-slate-500">Đang tải bình luận...</p> : !visibleComments.length && <p className="text-xs text-slate-500">Chưa có bình luận{filter === 'ALL' ? '. Nhấn C để thêm.' : ' phù hợp bộ lọc.'}</p>}
+            {visibleComments.map((comment) => <button key={comment.id} disabled={draftTime !== null || saving} onClick={() => pickComment(comment)} className={`w-full text-left p-3 rounded-xl border space-y-2 disabled:opacity-50 ${selectedId === comment.id ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:bg-slate-50'}`}>
+              <div className="flex justify-between text-xs"><span className="font-mono text-blue-600">{formatTime(comment.timestamp)}</span><span>{comment.id}</span></div>
+              <p className="text-xs break-words whitespace-pre-wrap">{comment.content}</p>
+              <p className="text-[11px] text-slate-500">{categories[comment.category]} · {priorities[comment.priority]} · {statuses[comment.status]}</p>
+            </button>)}
           </div>
         </aside>
+        <main className="flex-1 min-w-[320px] flex flex-col">
+          <div className="flex-1 min-h-0 bg-slate-100 p-4 flex items-center justify-center relative">
+            <video key={version.id} ref={videoRef} src={fileUrl(version.videoPath)} preload="metadata" className="w-full h-full object-contain bg-black rounded-xl" onClick={togglePlay}
+              onLoadedMetadata={(event) => { const value = event.currentTarget.duration; setDuration(Number.isFinite(value) ? value : 0) }}
+              onLoadedData={() => { setReady(true); setMediaError('') }}
+              onTimeUpdate={(event) => setTime(event.currentTarget.currentTime)}
+              onSeeked={(event) => setTime(event.currentTarget.currentTime)}
+              onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)}
+              onError={() => { setReady(false); setPlaying(false); setMediaError('Không mở được video. Tệp có thể đã bị di chuyển hoặc codec không được hỗ trợ. Hãy thử MP4 H.264.') }} />
+            {mediaError && <p role="alert" className="absolute inset-x-8 p-4 rounded-xl bg-white text-red-700 text-xs">{mediaError}</p>}
+          </div>
+          <div className="bg-white border-t p-4 space-y-4">
+            <div className="flex justify-between gap-2 items-center text-xs">
+              <span className="font-mono">{formatTime(time)} / {formatTime(duration)}</span>
+              <div className="flex gap-2">
+                <button aria-label="Frame trước" className={buttonClass} disabled={!ready || draftTime !== null} onClick={() => seek(time - 1 / (version.fps || 30))}><SkipBack size={14} /></button>
+                <button aria-label={playing ? 'Tạm dừng' : 'Phát'} className={buttonClass} disabled={!ready || draftTime !== null} onClick={togglePlay}>{playing ? <Pause size={14} /> : <Play size={14} />}</button>
+                <button aria-label="Frame tiếp" className={buttonClass} disabled={!ready || draftTime !== null} onClick={() => seek(time + 1 / (version.fps || 30))}><SkipForward size={14} /></button>
+              </div>
+              <button aria-label="Toàn màn hình" className={buttonClass} onClick={() => { void videoRef.current?.requestFullscreen().catch(() => setError('Không thể bật toàn màn hình.')) }}><Maximize size={14} /></button>
+            </div>
+            <label className="flex items-center gap-2 text-xs">Âm lượng <input aria-label="Âm lượng" type="range" min="0" max="1" step="0.05" value={volume} onChange={(event) => { const value = Number(event.target.value); setVolume(value); if (videoRef.current) videoRef.current.volume = value }} /></label>
+            <input aria-label="Vị trí phát video" type="range" min="0" max={duration || 1} step="0.001" value={Math.min(time, duration)} disabled={!ready || draftTime !== null} onChange={(event) => seek(Number(event.target.value))} className="w-full" />
+            <div className="relative h-7 mx-2 bg-slate-50 rounded-lg" aria-label="Marker bình luận">
+              {duration > 0 && comments.map((comment) => <button key={comment.id} aria-label={`${formatTime(comment.timestamp)}: ${comment.content}`} title={`${formatTime(comment.timestamp)}: ${comment.content}`} disabled={draftTime !== null || saving} onClick={() => pickComment(comment)} style={{ left: `${Math.min(100, comment.timestamp / duration * 100)}%` }} className={`absolute top-1 -translate-x-1/2 w-5 h-5 rounded-full border-2 border-white ${comment.status === 'FIXED' ? 'bg-emerald-500' : 'bg-blue-500'}`} />)}
+            </div>
+            <p className="text-[10px] text-slate-400">Space: phát/dừng · C: bình luận · ←/→: frame · Shift+←/→: 5 giây · Frame ước tính ({version.fps || 30} fps)</p>
+          </div>
+        </main>
+        <aside className="w-72 shrink-0 overflow-y-auto border-l border-slate-200 bg-white p-4 space-y-4">
+          <h2 className="font-bold text-sm">Ghi chú duyệt</h2>
+          {draftTime !== null ? <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void saveComment() }}>
+            <p className="font-mono text-xs">{formatTime(draftTime)} · Frame ~{Math.round(draftTime * (version.fps || 30))}</p>
+            <label className="block text-xs space-y-1"><span>Danh mục</span><select className={inputClass} value={category} disabled={saving} onChange={(event) => setCategory(event.target.value as CommentCategory)}>{Object.entries(categories).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+            <label className="block text-xs space-y-1"><span>Mức ưu tiên</span><select className={inputClass} value={priority} disabled={saving} onChange={(event) => setPriority(event.target.value as CommentPriority)}>{Object.entries(priorities).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+            <label className="block text-xs space-y-1"><span>Nội dung phản hồi</span><textarea ref={textRef} className={inputClass} rows={7} required value={content} disabled={saving} onChange={(event) => setContent(event.target.value)} /></label>
+            <div className="flex gap-2"><button type="button" className={buttonClass} disabled={saving} onClick={() => setDraftTime(null)}>Hủy</button><button type="submit" disabled={saving || !content.trim()} className={`${buttonClass} bg-blue-600 text-white hover:bg-blue-700`}>{saving ? 'Đang lưu...' : 'Lưu bình luận'}</button></div>
+            <p className="text-[10px] text-slate-400">Ctrl+Enter: lưu · Mốc thời gian được giữ cố định trong khi nhập.</p>
+          </form> : <>
+            <button className={`${buttonClass} flex items-center gap-2`} disabled={!ready || loading || saving} onClick={startComment}><Plus size={14} />Thêm bình luận (C)</button>
+            {selected ? <div className="space-y-4 text-xs">
+              <p className="font-mono text-blue-600">{selected.id} · {formatTime(selected.timestamp)}</p>
+              <p>{categories[selected.category]} · Ưu tiên: {priorities[selected.priority]}</p>
+              <p className="whitespace-pre-wrap break-words leading-relaxed">{selected.content}</p>
+              <label className="block space-y-1"><span>Trạng thái</span><select className={inputClass} disabled={saving} value={selected.status} onChange={(event) => { void updateStatus(event.target.value as CommentStatus) }}>{Object.entries(statuses).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+              <p className="text-slate-400">{new Date(selected.createdAt).toLocaleString('vi-VN')}</p>
+            </div> : <p className="text-xs text-slate-500">Chọn bình luận để xem chi tiết hoặc tạm dừng video để ghi nhận phản hồi.</p>}
+          </>}
+        </aside>
       </div>
-    </div>
+    </>
   )
 }

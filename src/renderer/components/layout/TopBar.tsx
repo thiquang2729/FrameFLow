@@ -1,5 +1,5 @@
 import React from 'react'
-import { ChevronRight, Search, Bell } from 'lucide-react'
+import { ChevronRight, Search } from 'lucide-react'
 import { useProjectStore } from '../../stores/project.store'
 
 export const TopBar: React.FC = () => {
@@ -32,7 +32,7 @@ export const TopBar: React.FC = () => {
         )}
       </div>
 
-      {/* Right Controls: Search bar + Notification Bell */}
+      {/* Local workspace search */}
       <div className="flex items-center gap-4">
         {/* Search Bar with ⌘ K */}
         <div className="relative flex items-center">
@@ -48,15 +48,6 @@ export const TopBar: React.FC = () => {
           </div>
         </div>
 
-        {/* Notification Bell */}
-        <button
-          type="button"
-          className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-xl transition-colors"
-          title="Thông báo"
-        >
-          <Bell className="w-4 h-4" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 ring-2 ring-white" />
-        </button>
       </div>
     </header>
   )

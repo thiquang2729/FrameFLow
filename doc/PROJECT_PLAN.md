@@ -657,6 +657,25 @@ FrameFlow/
 
 ## 8. Task Breakdown
 
+### Tiến độ triển khai — 27/10/2026
+
+- Đã có scaffolding, schema 7 bảng, services/IPC và giao diện nền. Stack thực tế: React 18, Tailwind 3, `sql.js`; chưa dùng Drizzle/better-sqlite3 như đề xuất ban đầu.
+- **Review Core đã nối dữ liệu thật:** chọn EditVersion, play/pause/seek, frame step ước tính, nhảy 5 giây, volume/fullscreen, tạo bình luận tại timestamp cố định, danh sách theo timestamp, chi tiết, lọc/cập nhật trạng thái và timeline markers.
+- Phím tắt đã nối: Space, C, ←/→, Shift+←/→, Ctrl/Cmd+Enter. D dành cho annotation ở M4; 1/2/3 chỉ chọn ưu tiên khi không focus ô nhập liệu.
+- Backend kiểm tra project–version, timestamp, nội dung, enums; sửa ID trùng khi xóa bình luận giữa danh sách và giữ frame 0.
+- **Yêu cầu xác nhận:** ứng dụng local cho một người; không đăng nhập/tài khoản, nhóm, mời thành viên, chia sẻ cộng tác hay nhiều tác giả bình luận. Đã bỏ profile giả, avatar, nhóm và tên tác giả trên UI. Giữ field `created_by` hiện có để tương thích dữ liệu, không dùng làm hệ thống tài khoản.
+- Kiểm thử tự động: `pnpm test` (ReviewService với SQLite thật: persistence khi mở lại, tách version, sort, frame 0, ID sau xóa, validation và trạng thái).
+- **Bước tiếp theo:** M4 — capture frame tự động khi tạo bình luận, nối AnnotationCanvas/toolbar với ảnh thật và lưu annotation. Filmstrip thumbnail của TASK-PLY-003 và kiểm thử thao tác trực tiếp trong Electron vẫn chưa hoàn tất; chưa đánh dấu toàn bộ M3/MVP Done.
+
+#### Checklist kiểm tra trực tiếp Review Core
+
+1. Tạo/chọn dự án → Phiên bản → nhập MP4 H.264 → mở Review, chọn đúng phiên bản.
+2. Phát/dừng, kéo seekbar, thử ←/→ và Shift+←/→; kiểm tra timestamp, âm lượng, fullscreen.
+3. Nhấn C → nhập feedback, category/priority → Ctrl+Enter; bình luận xuất hiện đúng timestamp và marker.
+4. Click bình luận/marker → video seek; đổi trạng thái → lọc theo trạng thái.
+5. Đổi phiên bản/dự án → không lẫn bình luận; khởi động lại app → dữ liệu còn nguyên.
+6. Thử phiên bản không có tệp hoặc codec không hỗ trợ → hiển thị lỗi; dự án chưa có video/bình luận → empty state, không dùng dữ liệu mẫu trong Review.
+
 ### Milestone 1: Foundation (TASK-FND)
 
 | Task ID | Tên | Mô tả | Estimate |

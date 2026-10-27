@@ -10,12 +10,10 @@ import {
   Maximize,
   Target,
   Calendar,
-  Users,
   Check,
   FileText,
   Upload,
   ChevronDown,
-  Plus
 } from 'lucide-react'
 import { useProjectStore } from '../stores/project.store'
 import { EditVersion, ReviewComment } from '@shared/types'
@@ -86,30 +84,13 @@ export const Dashboard: React.FC = () => {
 
         {/* Right Action Cluster */}
         <div className="flex items-center gap-3">
-          {/* Avatar Stack (JD, MK, AL, +) */}
-          <div className="flex items-center -space-x-1.5">
-            <div className="w-7 h-7 rounded-full bg-blue-600 border-2 border-white flex items-center justify-center text-[10px] font-bold text-white shadow-2xs">
-              JD
-            </div>
-            <div className="w-7 h-7 rounded-full bg-[#f59e0b] border-2 border-white flex items-center justify-center text-[10px] font-bold text-white shadow-2xs">
-              MK
-            </div>
-            <div className="w-7 h-7 rounded-full bg-slate-500 border-2 border-white flex items-center justify-center text-[10px] font-bold text-white shadow-2xs">
-              AL
-            </div>
-            <div className="w-7 h-7 rounded-full bg-white border border-slate-300 flex items-center justify-center text-xs text-slate-600 shadow-2xs cursor-pointer hover:bg-slate-50 transition-colors">
-              <Plus className="w-3.5 h-3.5" />
-            </div>
-          </div>
-
-          {/* Chia sẻ Button */}
           <button
             type="button"
             onClick={() => setActiveTab('export')}
             className="flex items-center gap-2 px-3.5 h-9 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors shadow-2xs"
           >
             <Upload className="w-3.5 h-3.5" />
-            <span>Chia sẻ</span>
+            <span>Xuất gói phản hồi</span>
           </button>
 
           {/* Mở trong chế độ duyệt Button */}
@@ -270,7 +251,7 @@ export const Dashboard: React.FC = () => {
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-1">
-                00:48 • 4K • 28 thg 3, 2025, 3:14 CH • Chỉnh sửa bởi Maya Chen
+                {currentVersion ? `${formatTime(currentVersion.duration || 0)} • ${currentVersion.width}×${currentVersion.height} • ${new Date(currentVersion.createdAt).toLocaleString('vi-VN')}` : 'Chưa nhập bản dựng'}
               </p>
             </div>
 
@@ -341,10 +322,7 @@ export const Dashboard: React.FC = () => {
                       </div>
                       <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{c.content}</p>
                       <div className="flex items-center gap-1.5 mt-1.5 text-[10px] text-slate-400">
-                        <div className="w-3.5 h-3.5 rounded-full bg-slate-400 flex items-center justify-center text-[8px] font-bold text-white">
-                          MK
-                        </div>
-                        <span>Maya Chen • 2 giờ trước</span>
+                        <span>{new Date(c.createdAt).toLocaleString('vi-VN')}</span>
                       </div>
                     </div>
 
@@ -355,103 +333,14 @@ export const Dashboard: React.FC = () => {
                 )
               })
             ) : (
-              /* Sample Mockup feedback items when no comments exist yet */
-              [
-                {
-                  id: '1',
-                  time: '00:12',
-                  title: 'Phụ đề đang che mặt nhân vật',
-                  desc: 'Có thể đặt phụ đề xuống thấp hơn hoặc dùng kích thước nhỏ hơn không?',
-                  author: 'Maya Chen',
-                  ago: '2 giờ trước',
-                  status: 'ĐANG MỞ',
-                  avatar: 'MK',
-                  avatarBg: 'bg-[#c29d72]'
-                },
-                {
-                  id: '2',
-                  time: '00:28',
-                  title: 'Nhịp cắt hơi chậm',
-                  desc: 'Phần này hơi dài một chút. Có thể rút ngắn để nhịp nhanh hơn.',
-                  author: 'Jordan Dell',
-                  ago: '5 giờ trước',
-                  status: 'ĐANG MỞ',
-                  avatar: 'JD',
-                  avatarBg: 'bg-blue-600'
-                },
-                {
-                  id: '3',
-                  time: '00:35',
-                  title: 'Cảnh quay quá tối',
-                  desc: 'Có thể tăng độ sáng ở phần này không? Nhân vật hơi khó nhìn thấy.',
-                  author: 'Alex Lee',
-                  ago: '1 ngày trước',
-                  status: 'ĐÃ SỬA',
-                  avatar: 'AL',
-                  avatarBg: 'bg-slate-500'
-                },
-                {
-                  id: '4',
-                  time: '00:43',
-                  title: 'Logo ở đoạn kết',
-                  desc: 'Logo nên to hơn một chút, giữ lâu hơn và thêm chuyển động mượt hơn.',
-                  author: 'Maya Chen',
-                  ago: '1 ngày trước',
-                  status: 'ĐÃ SỬA',
-                  avatar: 'MK',
-                  avatarBg: 'bg-[#c29d72]'
-                }
-              ].map((item) => (
-                <div
-                  key={item.id}
-                  onClick={() => setActiveTab('review')}
-                  className="p-3 bg-slate-50 hover:bg-slate-100/80 border border-slate-200/70 rounded-xl cursor-pointer transition-colors flex items-start gap-3 group"
-                >
-                  <div className="relative w-16 h-11 bg-slate-200 rounded-lg overflow-hidden shrink-0 border border-slate-300">
-                    <img
-                      src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80"
-                      alt="Thumbnail"
-                      className="w-full h-full object-cover"
-                    />
-                    <span className="absolute bottom-1 right-1 px-1 py-0.5 bg-black/80 rounded text-[9px] font-mono text-white">
-                      {item.time}
-                    </span>
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-bold text-slate-900 truncate">{item.title}</p>
-                      <span
-                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase ${
-                          item.status === 'ĐANG MỞ'
-                            ? 'bg-red-50 text-red-600 border-red-200'
-                            : 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                        }`}
-                      >
-                        {item.status}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{item.desc}</p>
-                    <div className="flex items-center gap-1.5 mt-1.5 text-[10px] text-slate-400">
-                      <div className={`w-3.5 h-3.5 rounded-full ${item.avatarBg} flex items-center justify-center text-[8px] font-bold text-white`}>
-                        {item.avatar}
-                      </div>
-                      <span>{item.author} • {item.ago}</span>
-                    </div>
-                  </div>
-
-                  <button type="button" className="text-slate-400 hover:text-slate-600 transition-colors p-1">
-                    <MoreVertical className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))
+              <p className="text-xs text-slate-500">Chưa có phản hồi. Mở chế độ duyệt để thêm ghi chú của bạn.</p>
             )}
           </div>
         </div>
       </div>
 
-      {/* 4. Bottom Row: 3 Cards (Mục tiêu dự án, Mốc thời gian, Nhóm) */}
-      <div className="grid grid-cols-3 gap-6">
+      {/* Project context */}
+      <div className="grid grid-cols-2 gap-6">
         {/* Card 1: Mục tiêu dự án */}
         <div className="bg-white border border-slate-200/80 rounded-2xl p-5 flex flex-col justify-between shadow-2xs">
           <div className="space-y-3">
@@ -495,7 +384,7 @@ export const Dashboard: React.FC = () => {
             </div>
 
             <div className="flex items-center justify-between">
-              <span className="text-slate-500">Duyệt khách hàng</span>
+              <span className="text-slate-500">Duyệt bản dựng</span>
               <div className="flex items-center gap-2">
                 <span className="text-slate-700 font-mono text-[11px]">5 thg 4, 2025</span>
                 <span className="w-2.5 h-2.5 rounded-full border-2 border-blue-600 inline-block" />
@@ -512,55 +401,6 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Card 3: Nhóm */}
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 flex flex-col justify-between shadow-2xs">
-          <div className="flex items-center gap-2.5 mb-3">
-            <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
-              <Users className="w-4 h-4" />
-            </div>
-            <h3 className="text-sm font-bold text-slate-900">Nhóm</h3>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-[9px] font-bold text-white">
-                  JD
-                </div>
-                <span className="text-xs font-semibold text-slate-800">Jordan Dell</span>
-              </div>
-              <span className="text-[11px] text-slate-500">Trưởng dự án</span>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-slate-500 flex items-center justify-center text-[9px] font-bold text-white">
-                  AL
-                </div>
-                <span className="text-xs font-semibold text-slate-800">Alex Lee</span>
-              </div>
-              <span className="text-[11px] text-slate-500">Nhà sản xuất</span>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-[#f59e0b] flex items-center justify-center text-[9px] font-bold text-white">
-                  MK
-                </div>
-                <span className="text-xs font-semibold text-slate-800">Maya Chen</span>
-              </div>
-              <span className="text-[11px] text-slate-500">Biên tập viên</span>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            className="mt-3 flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Thêm thành viên</span>
-          </button>
-        </div>
       </div>
     </div>
   )

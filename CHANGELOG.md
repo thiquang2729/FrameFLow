@@ -6,6 +6,18 @@ Quy ước đặt phiên bản tuân theo [Semantic Versioning](https://semver.o
 
 ---
 
+## [Unreleased]
+
+### Added
+- Nối Review Workspace với SQLite/IPC thật: chọn phiên bản, player và phím tắt, tạo bình luận theo timestamp, lọc/trạng thái và timeline markers.
+- Kiểm thử ReviewService bằng SQLite: lưu/mở lại, cách ly phiên bản, validation, frame 0, ID sau xóa và cập nhật trạng thái.
+
+### Changed
+- Giao diện dành cho một người dùng local: bỏ hồ sơ tài khoản giả, nhóm/avatar/thêm thành viên, tên tác giả bình luận và thông báo giả; đổi chia sẻ thành xuất gói phản hồi. Không yêu cầu đăng nhập.
+
+### Fixed
+- Tránh ID bình luận trùng khi xóa một bình luận giữa danh sách; xác thực quan hệ project/version và dữ liệu feedback ở backend.
+
 ## [0.1.0] - 2026-10-27
 
 ### Added (Khởi tạo nền tảng & Kiến trúc V0.1)

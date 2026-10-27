@@ -128,7 +128,6 @@ export const VersionList: React.FC = () => {
               duration: '00:48',
               res: '4K',
               date: '28 thg 3, 2025, 3:14 CH',
-              author: 'Maya Chen',
               desc: 'Đã sửa phụ đề, tăng độ sáng đoạn kết và tinh chỉnh âm thanh.',
               thumb: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80'
             },
@@ -140,7 +139,6 @@ export const VersionList: React.FC = () => {
               duration: '00:48',
               res: '4K',
               date: '25 thg 3, 2025, 10:20 SA',
-              author: 'Jordan Dell',
               desc: 'Bổ sung các đoạn phỏng vấn ngoài trời và đồng bộ nhạc nền.',
               thumb: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=600&q=80'
             },
@@ -152,7 +150,6 @@ export const VersionList: React.FC = () => {
               duration: '00:52',
               res: '4K',
               date: '20 thg 3, 2025, 4:45 CH',
-              author: 'Alex Lee',
               desc: 'Bản dựng thô ráp nối toàn bộ kịch bản ban đầu.',
               thumb: 'https://images.unsplash.com/photo-1541829070764-84a7d30dd3f3?auto=format&fit=crop&w=600&q=80'
             }
@@ -184,7 +181,7 @@ export const VersionList: React.FC = () => {
                   </div>
                   <p className="text-xs text-slate-500 mt-1">{ver.desc}</p>
                   <p className="text-[11px] text-slate-400 mt-1 font-medium">
-                    {ver.res} • {ver.date} • Chỉnh sửa bởi {ver.author}
+                    {ver.res} • {ver.date}
                   </p>
                 </div>
               </div>
@@ -237,8 +234,6 @@ export const VersionList: React.FC = () => {
                       </span>
                       <span>•</span>
                       <span>Tạo ngày {new Date(ver.createdAt).toLocaleDateString('vi-VN')}</span>
-                      <span>•</span>
-                      <span>Bởi {ver.createdBy}</span>
                     </div>
                   </div>
                 </div>

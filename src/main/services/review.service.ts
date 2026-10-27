@@ -2,7 +2,6 @@ import fs from 'fs'
 import path from 'path'
 import { ulid } from 'ulid'
 import {
-  CommentStatus,
   CreateCommentDTO,
   ReviewAttachment,
   ReviewComment,
@@ -85,12 +84,30 @@ export class ReviewService {
     if (!project) throw new Error('Project not found')
     const db = await this.projectService.getDb(dto.projectId)
 
-    // Generate short human-readable review ID: R001, R002...
-    const countRow = db.get<{ count: number }>(
-      `SELECT COUNT(*) as count FROM review_comments WHERE project_id = ?`,
-      [dto.projectId]
+    const version = db.get<{ fps: number; duration: number }>(
+      'SELECT fps, duration FROM edit_versions WHERE id = ? AND project_id = ?',
+      [dto.editVersionId, dto.projectId]
     )
-    const nextSeq = (countRow?.count || 0) + 1
+    if (!version) throw new Error('Version does not belong to this project')
+    if (!Number.isFinite(dto.timestamp) || dto.timestamp < 0 ||
+      (version.duration > 0 && dto.timestamp > version.duration)) {
+      throw new Error('Invalid comment timestamp')
+    }
+    if (typeof dto.content !== 'string' || !dto.content.trim()) throw new Error('Comment content is required')
+    if (!['SUBTITLE', 'PACING', 'AUDIO', 'COLOR', 'CUT', 'EFFECT', 'GRAPHICS', 'GENERAL'].includes(dto.category)) {
+      throw new Error('Invalid comment category')
+    }
+    if (!['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(dto.priority)) throw new Error('Invalid comment priority')
+    if (dto.frameNumber != null && (!Number.isInteger(dto.frameNumber) || dto.frameNumber < 0)) {
+      throw new Error('Invalid frame number')
+    }
+    const frameNumber = dto.frameNumber ?? Math.round(dto.timestamp * (version.fps > 0 ? version.fps : 30))
+
+    // Generate short human-readable review ID: R001, R002...
+    const sequenceRow = db.get<{ sequence: number }>(
+      `SELECT COALESCE(MAX(CAST(SUBSTR(id, 2) AS INTEGER)), 0) AS sequence FROM review_comments WHERE id GLOB 'R[0-9]*'`
+    )
+    const nextSeq = (sequenceRow?.sequence || 0) + 1
     const reviewId = `R${String(nextSeq).padStart(3, '0')}`
     const now = new Date().toISOString()
 
@@ -103,10 +120,10 @@ export class ReviewService {
         dto.projectId,
         dto.editVersionId,
         dto.timestamp,
-        dto.frameNumber || Math.round(dto.timestamp * 30),
+        frameNumber,
         dto.category,
         dto.priority,
-        dto.content,
+        dto.content.trim(),
         'OPEN',
         'User',
         now
@@ -190,10 +207,10 @@ export class ReviewService {
       projectId: dto.projectId,
       editVersionId: dto.editVersionId,
       timestamp: dto.timestamp,
-      frameNumber: dto.frameNumber || Math.round(dto.timestamp * 30),
+      frameNumber,
       category: dto.category,
       priority: dto.priority,
-      content: dto.content,
+      content: dto.content.trim(),
       status: 'OPEN',
       createdBy: 'User',
       createdAt: now,
@@ -203,15 +220,21 @@ export class ReviewService {
   }
 
   public async updateStatus(dto: UpdateCommentStatusDTO & { projectId: string }): Promise<boolean> {
+    if (!['OPEN', 'IN_PROGRESS', 'FIXED', 'PARTIAL', 'REJECTED'].includes(dto.status)) {
+      throw new Error('Invalid comment status')
+    }
     const db = await this.projectService.getDb(dto.projectId)
+    if (!db.get('SELECT id FROM review_comments WHERE id = ? AND project_id = ?', [dto.commentId, dto.projectId])) {
+      throw new Error('Comment not found in this project')
+    }
     const now = new Date().toISOString()
     const resolvedAt = dto.status === 'FIXED' ? now : null
 
     db.run(
       `UPDATE review_comments
        SET status = ?, resolved_at = ?
-       WHERE id = ?`,
-      [dto.status, resolvedAt, dto.commentId]
+        WHERE id = ? AND project_id = ?`,
+      [dto.status, resolvedAt, dto.commentId, dto.projectId]
     )
     return true
   }

@@ -7,8 +7,7 @@ import {
   Layers,
   Upload,
   Plus,
-  Search,
-  Settings
+  Search
 } from 'lucide-react'
 import { useProjectStore } from '../../stores/project.store'
 
@@ -137,24 +136,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenCreateProject }) => {
         </button>
       </div>
 
-      {/* Bottom Profile Footer */}
-      <div className="p-3.5 border-t border-slate-200 flex items-center justify-between bg-white">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-xs font-bold text-slate-700 shrink-0">
-            JD
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-slate-900 truncate">Jordan Dell</p>
-            <p className="text-[11px] text-slate-500 truncate">jordan@frameflow.co</p>
-          </div>
-        </div>
-        <button
-          type="button"
-          className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
-          title="Cài đặt"
-        >
-          <Settings className="w-4 h-4" />
-        </button>
+      <div className="p-3.5 border-t border-slate-200 bg-white text-[11px] text-slate-500">
+        Không gian cá nhân · Lưu trên máy
       </div>
     </aside>
   )
