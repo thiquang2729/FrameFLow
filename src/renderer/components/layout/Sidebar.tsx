@@ -1,14 +1,13 @@
 import React from 'react'
 import {
-  LayoutDashboard,
-  FileVideo,
-  Film,
+  Folder,
+  FileEdit,
   MessageSquare,
   Bot,
-  BrainCircuit,
-  Share2,
+  Layers,
+  Upload,
   Plus,
-  FolderOpen,
+  Search,
   Settings
 } from 'lucide-react'
 import { useProjectStore } from '../../stores/project.store'
@@ -21,46 +20,34 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenCreateProject }) => {
   const { projects, activeProject, activeTab, setActiveTab, selectProject } = useProjectStore()
 
   const navItems = [
-    { id: 'overview', label: 'Tổng quan', icon: LayoutDashboard },
-    { id: 'src', label: 'Thư viện SRC', icon: FileVideo },
-    { id: 'versions', label: 'Phiên bản dựng', icon: Film },
-    { id: 'review', label: 'Duyệt (Review)', icon: MessageSquare, highlight: true },
-    { id: 'agent', label: 'Tác nhân AI', icon: Bot, disabled: true, tag: 'Next' },
-    { id: 'memory', label: 'Bộ nhớ (Memory)', icon: BrainCircuit, disabled: true, tag: 'Next' },
-    { id: 'export', label: 'Xuất dự án', icon: Share2 }
+    { id: 'overview', label: 'Overview', icon: Folder },
+    { id: 'src', label: 'SRC Library', icon: Folder },
+    { id: 'versions', label: 'Edit Versions', icon: FileEdit },
+    { id: 'review', label: 'Review', icon: MessageSquare },
+    { id: 'agent', label: 'Agent', icon: Bot, disabled: true },
+    { id: 'memory', label: 'Memory', icon: Layers, disabled: true },
+    { id: 'export', label: 'Export', icon: Upload }
   ] as const
 
   return (
-    <aside className="w-64 h-full bg-[#12161f] border-r border-[#21262d] flex flex-col justify-between shrink-0 select-none">
-      {/* Top: Logo & Main Nav */}
-      <div className="flex flex-col">
-        {/* Logo */}
-        <div className="h-14 px-5 flex items-center gap-3 border-b border-[#21262d]">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
-            <svg
-              className="w-5 h-5 text-white"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2.5}
-                d="M13 10V3L4 14h7v7l9-11h-7z"
-              />
+    <aside className="w-60 h-full bg-[#0c1017] border-r border-[#1a2333] flex flex-col justify-between shrink-0 select-none text-slate-300">
+      {/* Top: Logo & Main Navigation */}
+      <div>
+        {/* FrameFlow Brand Logo */}
+        <div className="h-16 px-6 flex items-center gap-3">
+          {/* Logo Icon (matching mockup: 3 slanted blue bars) */}
+          <div className="w-7 h-7 flex items-center justify-center">
+            <svg viewBox="0 0 24 24" className="w-6 h-6 text-blue-500 fill-current">
+              <rect x="2" y="4" width="20" height="3" rx="1.5" />
+              <rect x="5" y="10.5" width="17" height="3" rx="1.5" />
+              <rect x="2" y="17" width="14" height="3" rx="1.5" />
             </svg>
           </div>
-          <div>
-            <span className="font-bold text-lg text-white tracking-tight">FrameFlow</span>
-            <span className="ml-1 text-[10px] uppercase font-semibold text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">
-              v0.1
-            </span>
-          </div>
+          <span className="font-bold text-lg text-white tracking-tight">FrameFlow</span>
         </div>
 
-        {/* Navigation Links */}
-        <nav className="p-3 space-y-1">
+        {/* Primary Navigation */}
+        <nav className="px-3.5 space-y-1 mt-1">
           {navItems.map((item) => {
             const Icon = item.icon
             const isActive = activeTab === item.id
@@ -71,56 +58,43 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenCreateProject }) => {
                 key={item.id}
                 disabled={isDisabled}
                 onClick={() => !isDisabled && setActiveTab(item.id as any)}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all ${
                   isDisabled
-                    ? 'opacity-40 cursor-not-allowed text-slate-500'
+                    ? 'opacity-35 cursor-not-allowed text-slate-500'
                     : isActive
-                      ? 'bg-blue-600/15 text-blue-400 font-semibold'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                      ? 'bg-[#132a4a] text-blue-400 font-semibold border border-blue-500/20'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-[#141b27]'
                 }`}
               >
-                <div className="flex items-center gap-3">
-                  <Icon
-                    className={`w-4 h-4 ${
-                      isActive ? 'text-blue-400' : 'text-slate-400'
-                    }`}
-                  />
-                  <span>{item.label}</span>
-                </div>
-                {'tag' in item && item.tag && (
-                  <span className="text-[10px] font-mono text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded">
-                    {item.tag}
-                  </span>
-                )}
-                {'highlight' in item && item.highlight && !isActive && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                )}
+                <Icon
+                  className={`w-4 h-4 ${
+                    isActive ? 'text-blue-400' : 'text-slate-400'
+                  }`}
+                />
+                <span>{item.label}</span>
               </button>
             )
           })}
         </nav>
       </div>
 
-      {/* Middle/Bottom: Projects List */}
-      <div className="flex-1 flex flex-col justify-end px-3 py-2 border-t border-[#21262d] min-h-0">
-        <div className="flex items-center justify-between px-2 mb-1.5">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-            Dự án ({projects.length})
-          </span>
+      {/* Middle/Bottom: Projects Section */}
+      <div className="flex-1 flex flex-col justify-end px-3.5 py-3 border-t border-[#1a2333] min-h-0">
+        <div className="flex items-center justify-between px-3 mb-2">
+          <span className="text-xs font-semibold text-slate-400">Projects</span>
           <button
-            onClick={onOpenCreateProject}
-            title="Tạo dự án mới"
-            className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            title="Search projects"
+            className="p-1 text-slate-400 hover:text-slate-200 transition"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Search className="w-3.5 h-3.5" />
           </button>
         </div>
 
         {/* Scrollable Project List */}
-        <div className="overflow-y-auto max-h-40 space-y-0.5 pr-1 text-sm">
+        <div className="overflow-y-auto max-h-48 space-y-1 pr-1 text-xs">
           {projects.length === 0 ? (
-            <div className="p-3 text-center text-xs text-slate-500 border border-dashed border-[#30363d] rounded-lg">
-              Chưa có dự án nào
+            <div className="p-3 text-center text-xs text-slate-500 border border-dashed border-[#1f293d] rounded-xl">
+              No projects yet
             </div>
           ) : (
             projects.map((p) => {
@@ -129,13 +103,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenCreateProject }) => {
                 <button
                   key={p.id}
                   onClick={() => selectProject(p.id)}
-                  className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-left text-xs transition ${
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition ${
                     isCurrent
-                      ? 'bg-blue-600 text-white font-medium shadow-sm'
-                      : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
+                      ? 'bg-[#132a4a] text-blue-400 font-medium border-l-2 border-blue-500'
+                      : 'text-slate-400 hover:bg-[#141b27] hover:text-slate-200'
                   }`}
                 >
-                  <FolderOpen className={`w-3.5 h-3.5 shrink-0 ${isCurrent ? 'text-white' : 'text-slate-500'}`} />
+                  <Folder className={`w-3.5 h-3.5 shrink-0 ${isCurrent ? 'text-blue-400' : 'text-slate-500'}`} />
                   <span className="truncate">{p.name}</span>
                 </button>
               )
@@ -143,30 +117,30 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenCreateProject }) => {
           )}
         </div>
 
-        {/* New project quick trigger */}
+        {/* + New Project link */}
         <button
           onClick={onOpenCreateProject}
-          className="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 border border-blue-500/20 rounded-lg transition"
+          className="mt-2.5 flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-blue-400 hover:text-blue-300 transition"
         >
           <Plus className="w-3.5 h-3.5" />
-          <span>Tạo dự án mới</span>
+          <span>New Project</span>
         </button>
       </div>
 
-      {/* Bottom: User / Workspace info */}
-      <div className="p-3 border-t border-[#21262d] flex items-center justify-between">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-xs font-bold text-white shrink-0">
-            FF
+      {/* Bottom Profile Footer */}
+      <div className="p-3.5 border-t border-[#1a2333] flex items-center justify-between">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-8 h-8 rounded-full bg-[#1e2638] border border-[#2d374d] flex items-center justify-center text-xs font-semibold text-slate-300 shrink-0">
+            JD
           </div>
           <div className="min-w-0">
-            <p className="text-xs font-medium text-slate-200 truncate">FrameFlow Local</p>
-            <p className="text-[10px] text-slate-500 truncate">Workspace V0.1</p>
+            <p className="text-xs font-semibold text-slate-200 truncate">Jordan Dell</p>
+            <p className="text-[11px] text-slate-500 truncate">jordan@frameflow.co</p>
           </div>
         </div>
         <button
-          className="p-1.5 text-slate-400 hover:text-white rounded-md hover:bg-slate-800 transition"
-          title="Cài đặt"
+          className="p-1.5 text-slate-400 hover:text-slate-200 rounded-lg hover:bg-[#18202f] transition"
+          title="Settings"
         >
           <Settings className="w-4 h-4" />
         </button>
