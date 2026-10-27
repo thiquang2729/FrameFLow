@@ -18,7 +18,7 @@ export default function App(): React.JSX.Element {
   }, [])
 
   return (
-    <div className="flex h-screen w-screen bg-[#0d1117] text-slate-100 overflow-hidden font-sans">
+    <div className="flex h-screen w-screen bg-[#f8fafc] text-slate-900 overflow-hidden font-sans">
       {/* 1. Left Sidebar Navigation */}
       <Sidebar onOpenCreateProject={() => setIsCreateModalOpen(true)} />
 

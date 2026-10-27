@@ -46,11 +46,11 @@ export const Dashboard: React.FC = () => {
 
   if (!activeProject) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#0c1017]">
-        <Folder className="w-12 h-12 text-slate-600 mb-3" />
-        <h2 className="text-base font-bold text-white">No Project Selected</h2>
-        <p className="text-xs text-slate-400 mt-1 max-w-sm">
-          Select an existing project from the sidebar or click "New Project" to get started.
+      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#f8fafc]">
+        <Folder className="w-12 h-12 text-slate-400 mb-3" />
+        <h2 className="text-base font-bold text-slate-800">Chưa chọn dự án</h2>
+        <p className="text-xs text-slate-500 mt-1 max-w-sm">
+          Chọn một dự án từ danh sách bên trái hoặc nhấn "Dự án mới" để bắt đầu.
         </p>
       </div>
     )
@@ -64,23 +64,23 @@ export const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-8 space-y-6 bg-[#0c1017] text-slate-200">
+    <div className="flex-1 overflow-y-auto p-8 space-y-6 bg-[#f8fafc] text-slate-800">
       {/* 1. Project Header Row */}
       <div className="flex items-start justify-between">
-        <div className="space-y-1.5">
-          <h1 className="text-2xl font-extrabold text-white tracking-tight">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
             {activeProject.name}
           </h1>
-          <div className="flex items-center gap-2.5 text-xs text-slate-400">
-            <span>{activeProject.targetPlatform || 'Brand'}</span>
+          <div className="flex items-center gap-2.5 text-xs text-slate-500 font-medium">
+            <span>{activeProject.targetPlatform || 'Thương hiệu'}</span>
             <span>•</span>
             <span>00:45–{formatTime(activeProject.targetDuration || 60)}</span>
             <span>•</span>
             <span>{activeProject.aspectRatio || '16:9'}</span>
             <span>•</span>
-            <span>Created {new Date(activeProject.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+            <span>Tạo ngày {new Date(activeProject.createdAt).toLocaleDateString('vi-VN', { day: 'numeric', month: 'numeric', year: 'numeric' })}</span>
             <span>•</span>
-            <span>Updated 2 hours ago</span>
+            <span>Cập nhật 2 giờ trước</span>
           </div>
         </div>
 
@@ -88,102 +88,104 @@ export const Dashboard: React.FC = () => {
         <div className="flex items-center gap-3">
           {/* Avatar Stack (JD, MK, AL, +) */}
           <div className="flex items-center -space-x-1.5">
-            <div className="w-7 h-7 rounded-full bg-blue-600 border-2 border-[#0c1017] flex items-center justify-center text-[10px] font-bold text-white shadow-sm">
+            <div className="w-7 h-7 rounded-full bg-blue-600 border-2 border-white flex items-center justify-center text-[10px] font-bold text-white shadow-2xs">
               JD
             </div>
-            <div className="w-7 h-7 rounded-full bg-[#c29d72] border-2 border-[#0c1017] flex items-center justify-center text-[10px] font-bold text-white shadow-sm">
+            <div className="w-7 h-7 rounded-full bg-[#f59e0b] border-2 border-white flex items-center justify-center text-[10px] font-bold text-white shadow-2xs">
               MK
             </div>
-            <div className="w-7 h-7 rounded-full bg-[#64748b] border-2 border-[#0c1017] flex items-center justify-center text-[10px] font-bold text-white shadow-sm">
+            <div className="w-7 h-7 rounded-full bg-slate-500 border-2 border-white flex items-center justify-center text-[10px] font-bold text-white shadow-2xs">
               AL
             </div>
-            <div className="w-7 h-7 rounded-full bg-[#1b2333] border-2 border-[#0c1017] flex items-center justify-center text-xs text-slate-400 shadow-sm cursor-pointer hover:bg-slate-700 transition">
+            <div className="w-7 h-7 rounded-full bg-white border border-slate-300 flex items-center justify-center text-xs text-slate-600 shadow-2xs cursor-pointer hover:bg-slate-50 transition-colors">
               <Plus className="w-3.5 h-3.5" />
             </div>
           </div>
 
-          {/* Share Button */}
+          {/* Chia sẻ Button */}
           <button
+            type="button"
             onClick={() => setActiveTab('export')}
-            className="flex items-center gap-2 px-3.5 h-9 bg-[#131923] hover:bg-[#18202f] border border-[#1f293d] text-slate-200 text-xs font-semibold rounded-xl transition shadow-sm"
+            className="flex items-center gap-2 px-3.5 h-9 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors shadow-2xs"
           >
             <Upload className="w-3.5 h-3.5" />
-            <span>Share</span>
+            <span>Chia sẻ</span>
           </button>
 
-          {/* Open in Review Button */}
+          {/* Mở trong chế độ duyệt Button */}
           <button
+            type="button"
             onClick={() => setActiveTab('review')}
-            className="flex items-center gap-2 px-4 h-9 bg-[#1d6bf3] hover:bg-[#185cd4] text-white text-xs font-semibold rounded-xl transition shadow-lg shadow-blue-500/20"
+            className="flex items-center gap-2 px-4 h-9 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl transition-colors shadow-sm"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
-            <span>Open in Review</span>
+            <span>Mở trong chế độ duyệt</span>
           </button>
         </div>
       </div>
 
       {/* 2. Top 4 Metric Cards */}
       <div className="grid grid-cols-4 gap-4">
-        {/* Card 1: Total SRC clips */}
-        <div className="p-4 bg-[#131923] border border-[#1f293d] rounded-2xl flex items-center gap-4">
-          <div className="w-11 h-11 rounded-xl bg-[#132a4a] border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
+        {/* Card 1: Tổng số clip SRC */}
+        <div className="p-4 bg-white border border-slate-200/80 rounded-2xl flex items-center gap-4 shadow-2xs">
+          <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
             <Folder className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs text-slate-400 font-medium">Total SRC clips</p>
-            <p className="text-2xl font-bold text-white tracking-tight mt-0.5">
+            <p className="text-xs text-slate-500 font-medium">Tổng số clip SRC</p>
+            <p className="text-2xl font-bold text-slate-900 tracking-tight mt-0.5">
               {stats?.sourceCount || 128}
             </p>
-            <p className="text-[11px] text-slate-400 mt-0.5">12 added this week</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Đã thêm 12 clip trong tuần này</p>
           </div>
         </div>
 
-        {/* Card 2: Edit versions */}
-        <div className="p-4 bg-[#131923] border border-[#1f293d] rounded-2xl flex items-center gap-4">
-          <div className="w-11 h-11 rounded-xl bg-[#281e46] border border-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
+        {/* Card 2: Phiên bản dựng */}
+        <div className="p-4 bg-white border border-slate-200/80 rounded-2xl flex items-center gap-4 shadow-2xs">
+          <div className="w-11 h-11 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 shrink-0">
             <Film className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs text-slate-400 font-medium">Edit versions</p>
-            <p className="text-2xl font-bold text-white tracking-tight mt-0.5">
+            <p className="text-xs text-slate-500 font-medium">Phiên bản dựng</p>
+            <p className="text-2xl font-bold text-slate-900 tracking-tight mt-0.5">
               {stats?.versionCount || (versions.length > 0 ? versions.length : 3)}
             </p>
             <p className="text-[11px] text-slate-400 mt-0.5">
-              {currentVersion ? currentVersion.name : 'Draft V3'} latest
+              {currentVersion ? currentVersion.name : 'Bản dựng V3'} mới nhất
             </p>
           </div>
         </div>
 
-        {/* Card 3: Open reviews */}
-        <div className="p-4 bg-[#131923] border border-[#1f293d] rounded-2xl flex items-center gap-4">
-          <div className="w-11 h-11 rounded-xl bg-[#3b1d28] border border-red-500/20 flex items-center justify-center text-red-400 shrink-0">
+        {/* Card 3: Phản hồi đang mở */}
+        <div className="p-4 bg-white border border-slate-200/80 rounded-2xl flex items-center gap-4 shadow-2xs">
+          <div className="w-11 h-11 rounded-xl bg-red-50 flex items-center justify-center text-red-500 shrink-0">
             <MessageSquare className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs text-slate-400 font-medium">Open reviews</p>
-            <p className="text-2xl font-bold text-white tracking-tight mt-0.5">
+            <p className="text-xs text-slate-500 font-medium">Phản hồi đang mở</p>
+            <p className="text-2xl font-bold text-slate-900 tracking-tight mt-0.5">
               {stats?.openReviewCount !== undefined ? stats.openReviewCount : 5}
             </p>
             <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
-              <span>{stats?.highPriorityCount || 3} high priority</span>
+              <span>{stats?.highPriorityCount || 3} ưu tiên cao</span>
             </p>
           </div>
         </div>
 
-        {/* Card 4: Current status */}
-        <div className="p-4 bg-[#131923] border border-[#1f293d] rounded-2xl flex items-center justify-between">
+        {/* Card 4: Trạng thái hiện tại */}
+        <div className="p-4 bg-white border border-slate-200/80 rounded-2xl flex items-center justify-between shadow-2xs">
           <div className="flex items-center gap-4">
             {/* Donut progress ring */}
-            <div className="w-11 h-11 rounded-xl bg-[#132a4a] border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
+            <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
               <svg className="w-6 h-6 -rotate-90" viewBox="0 0 36 36">
-                <circle cx="18" cy="18" r="14" fill="none" stroke="#1f293d" strokeWidth="3" />
+                <circle cx="18" cy="18" r="14" fill="none" stroke="#e2e8f0" strokeWidth="3" />
                 <circle
                   cx="18"
                   cy="18"
                   r="14"
                   fill="none"
-                  stroke="#3b82f6"
+                  stroke="#2563eb"
                   strokeWidth="3"
                   strokeDasharray="88"
                   strokeDashoffset="26"
@@ -192,32 +194,33 @@ export const Dashboard: React.FC = () => {
               </svg>
             </div>
             <div>
-              <p className="text-xs text-slate-400 font-medium">Current status</p>
-              <p className="text-base font-bold text-white mt-0.5">In Review</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">Due Apr 12, 2025</p>
+              <p className="text-xs text-slate-500 font-medium">Trạng thái hiện tại</p>
+              <p className="text-base font-bold text-slate-900 mt-0.5">Đang duyệt</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Hạn: 12 thg 4, 2025</p>
             </div>
           </div>
-          <ChevronDown className="w-4 h-4 text-slate-500" />
+          <ChevronDown className="w-4 h-4 text-slate-400" />
         </div>
       </div>
 
-      {/* 3. Middle Row: Current Draft (7 cols) + Recent Feedback (5 cols) */}
+      {/* 3. Middle Row: Bản dựng hiện tại (7 cols) + Phản hồi gần đây (5 cols) */}
       <div className="grid grid-cols-12 gap-6">
-        {/* Left (7 cols): Current Draft Card */}
-        <div className="col-span-7 bg-[#131923] border border-[#1f293d] rounded-2xl p-5 flex flex-col justify-between">
+        {/* Left (7 cols): Bản dựng hiện tại Card */}
+        <div className="col-span-7 bg-white border border-slate-200/80 rounded-2xl p-5 flex flex-col justify-between shadow-2xs">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-bold text-white">Current Draft</h2>
+            <h2 className="text-sm font-bold text-slate-900">Bản dựng hiện tại</h2>
             <button
+              type="button"
               onClick={() => setActiveTab('versions')}
-              className="text-xs text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1.5 transition"
+              className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1.5 transition-colors"
             >
-              <span>View all versions</span>
+              <span>Xem tất cả các phiên bản</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
           {/* Video Preview Container */}
-          <div className="relative aspect-video bg-[#070a0f] rounded-xl overflow-hidden border border-[#1f293d] flex items-center justify-center group shadow-inner">
+          <div className="relative aspect-video bg-black rounded-xl overflow-hidden border border-slate-200 flex items-center justify-center group shadow-sm">
             {currentVersion ? (
               <video
                 src={`file:///${currentVersion.videoPath.replace(/\\/g, '/')}`}
@@ -227,15 +230,16 @@ export const Dashboard: React.FC = () => {
             ) : (
               <img
                 src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=1200&q=80"
-                alt="Draft Preview"
-                className="w-full h-full object-cover opacity-80"
+                alt="Bản dựng Preview"
+                className="w-full h-full object-cover opacity-90"
               />
             )}
 
             {/* Centered Play Button */}
             <button
+              type="button"
               onClick={() => setActiveTab('review')}
-              className="absolute w-12 h-12 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white flex items-center justify-center shadow-xl group-hover:scale-110 group-hover:bg-blue-600 transition"
+              className="absolute w-12 h-12 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white flex items-center justify-center shadow-xl group-hover:scale-110 group-hover:bg-blue-600 transition-all"
             >
               <Play className="w-5 h-5 fill-current ml-0.5" />
             </button>
@@ -244,9 +248,9 @@ export const Dashboard: React.FC = () => {
             <div className="absolute bottom-0 inset-x-0 p-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex items-center justify-between text-xs text-white">
               <div className="flex items-center gap-3">
                 <Play className="w-3.5 h-3.5 fill-current cursor-pointer" />
-                <span className="font-mono text-[11px] text-slate-300">00:00 / 00:48</span>
+                <span className="font-mono text-[11px] text-slate-200">00:00 / 00:48</span>
               </div>
-              <div className="flex items-center gap-3 text-slate-300">
+              <div className="flex items-center gap-3 text-slate-200">
                 <Volume2 className="w-4 h-4 cursor-pointer hover:text-white" />
                 <Maximize className="w-3.5 h-3.5 cursor-pointer hover:text-white" />
                 <MoreVertical className="w-3.5 h-3.5 cursor-pointer hover:text-white" />
@@ -254,53 +258,55 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Draft Metadata & Play in Review button */}
+          {/* Draft Metadata & Phát trong chế độ duyệt button */}
           <div className="flex items-center justify-between mt-4 pt-1">
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-sm text-white">
-                  {currentVersion ? currentVersion.name : 'Draft V3'}
+                <span className="font-bold text-sm text-slate-900">
+                  {currentVersion ? currentVersion.name : 'Bản dựng V3'}
                 </span>
-                <span className="px-2 py-0.5 text-[10px] bg-[#1d6bf3]/20 text-blue-400 font-bold rounded-md">
-                  LATEST
+                <span className="px-2 py-0.5 text-[10px] bg-blue-50 text-blue-600 font-bold border border-blue-200 rounded-md">
+                  MỚI NHẤT
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-1">
-                00:48 • 4K • Mar 28, 2025, 3:14 PM • Edited by Maya Chen
+              <p className="text-xs text-slate-500 mt-1">
+                00:48 • 4K • 28 thg 3, 2025, 3:14 CH • Chỉnh sửa bởi Maya Chen
               </p>
             </div>
 
-            {/* Play in Review with split dropdown */}
-            <div className="flex items-center rounded-xl bg-[#1d6bf3] hover:bg-[#185cd4] shadow-md shadow-blue-500/20 text-white transition overflow-hidden">
+            {/* Phát trong chế độ duyệt with split dropdown */}
+            <div className="flex items-center rounded-xl bg-blue-600 hover:bg-blue-700 shadow-sm text-white transition-colors overflow-hidden">
               <button
+                type="button"
                 onClick={() => setActiveTab('review')}
                 className="px-3.5 py-2 text-xs font-semibold flex items-center gap-2"
               >
                 <Play className="w-3.5 h-3.5 fill-current" />
-                <span>Play in Review</span>
+                <span>Phát trong chế độ duyệt</span>
               </button>
               <div className="w-[1px] h-4 bg-blue-400/40" />
-              <button className="px-2 py-2 hover:bg-black/10">
+              <button type="button" className="px-2 py-2 hover:bg-black/10">
                 <ChevronDown className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
         </div>
 
-        {/* Right (5 cols): Recent Feedback Card */}
-        <div className="col-span-5 bg-[#131923] border border-[#1f293d] rounded-2xl p-5 flex flex-col">
+        {/* Right (5 cols): Phản hồi gần đây Card */}
+        <div className="col-span-5 bg-white border border-slate-200/80 rounded-2xl p-5 flex flex-col shadow-2xs">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-bold text-white">Recent Feedback</h2>
+            <h2 className="text-sm font-bold text-slate-900">Phản hồi gần đây</h2>
             <button
+              type="button"
               onClick={() => setActiveTab('review')}
-              className="text-xs text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1.5 transition"
+              className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1.5 transition-colors"
             >
-              <span>View all</span>
+              <span>Xem tất cả</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          {/* Feedback items list (exact match to mockup) */}
+          {/* Feedback items list (exact match to Vietnamese mockup) */}
           <div className="space-y-3 flex-1 overflow-y-auto">
             {recentComments.length > 0 ? (
               recentComments.map((c) => {
@@ -309,11 +315,11 @@ export const Dashboard: React.FC = () => {
                   <div
                     key={c.id}
                     onClick={() => setActiveTab('review')}
-                    className="p-3 bg-[#0c1017] hover:bg-[#151c28] border border-[#1f293d] rounded-xl cursor-pointer transition flex items-start gap-3 group"
+                    className="p-3 bg-slate-50 hover:bg-slate-100/80 border border-slate-200/70 rounded-xl cursor-pointer transition-colors flex items-start gap-3 group"
                   >
                     {/* Thumbnail with timestamp badge */}
-                    <div className="relative w-16 h-11 bg-black rounded-lg overflow-hidden shrink-0 border border-[#2a364e]">
-                      <div className="w-full h-full bg-slate-800" />
+                    <div className="relative w-16 h-11 bg-slate-200 rounded-lg overflow-hidden shrink-0 border border-slate-300">
+                      <div className="w-full h-full bg-slate-300" />
                       <span className="absolute bottom-1 right-1 px-1 py-0.5 bg-black/80 rounded text-[9px] font-mono text-white">
                         {formatTime(c.timestamp)}
                       </span>
@@ -322,27 +328,27 @@ export const Dashboard: React.FC = () => {
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
-                        <p className="text-xs font-bold text-white truncate">{c.category}</p>
+                        <p className="text-xs font-bold text-slate-900 truncate">{c.category}</p>
                         <span
                           className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase ${
                             isOpen
-                              ? 'bg-red-500/10 text-red-400 border-red-500/20'
-                              : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                              ? 'bg-red-50 text-red-600 border-red-200'
+                              : 'bg-emerald-50 text-emerald-600 border-emerald-200'
                           }`}
                         >
-                          {isOpen ? 'OPEN' : 'FIXED'}
+                          {isOpen ? 'ĐANG MỞ' : 'ĐÃ SỬA'}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">{c.content}</p>
-                      <div className="flex items-center gap-1.5 mt-1.5 text-[10px] text-slate-500">
-                        <div className="w-3.5 h-3.5 rounded-full bg-slate-700 flex items-center justify-center text-[8px] font-bold text-white">
+                      <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{c.content}</p>
+                      <div className="flex items-center gap-1.5 mt-1.5 text-[10px] text-slate-400">
+                        <div className="w-3.5 h-3.5 rounded-full bg-slate-400 flex items-center justify-center text-[8px] font-bold text-white">
                           MK
                         </div>
-                        <span>Maya Chen • 2 hours ago</span>
+                        <span>Maya Chen • 2 giờ trước</span>
                       </div>
                     </div>
 
-                    <button className="text-slate-500 hover:text-slate-300 transition p-1">
+                    <button type="button" className="text-slate-400 hover:text-slate-600 transition-colors p-1">
                       <MoreVertical className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -354,44 +360,44 @@ export const Dashboard: React.FC = () => {
                 {
                   id: '1',
                   time: '00:12',
-                  title: 'Subtitle is covering her face',
-                  desc: 'Can we move the subtitle lower or use a smaller size?',
+                  title: 'Phụ đề đang che mặt nhân vật',
+                  desc: 'Có thể đặt phụ đề xuống thấp hơn hoặc dùng kích thước nhỏ hơn không?',
                   author: 'Maya Chen',
-                  ago: '2 hours ago',
-                  status: 'OPEN',
+                  ago: '2 giờ trước',
+                  status: 'ĐANG MỞ',
                   avatar: 'MK',
                   avatarBg: 'bg-[#c29d72]'
                 },
                 {
                   id: '2',
                   time: '00:28',
-                  title: 'Cut feels too slow',
-                  desc: "This section drags a bit. Let's tighten it by a few frames.",
+                  title: 'Nhịp cắt hơi chậm',
+                  desc: 'Phần này hơi dài một chút. Có thể rút ngắn để nhịp nhanh hơn.',
                   author: 'Jordan Dell',
-                  ago: '5 hours ago',
-                  status: 'OPEN',
+                  ago: '5 giờ trước',
+                  status: 'ĐANG MỞ',
                   avatar: 'JD',
                   avatarBg: 'bg-blue-600'
                 },
                 {
                   id: '3',
                   time: '00:35',
-                  title: 'Shot is too dark',
-                  desc: "Can we lift the exposure here? Hard to see the talent's face.",
+                  title: 'Cảnh quay quá tối',
+                  desc: 'Có thể tăng độ sáng ở phần này không? Nhân vật hơi khó nhìn thấy.',
                   author: 'Alex Lee',
-                  ago: '1 day ago',
-                  status: 'FIXED',
+                  ago: '1 ngày trước',
+                  status: 'ĐÃ SỬA',
                   avatar: 'AL',
-                  avatarBg: 'bg-slate-600'
+                  avatarBg: 'bg-slate-500'
                 },
                 {
                   id: '4',
                   time: '00:43',
-                  title: 'End card logo animation',
-                  desc: "Let's make the logo a bit larger and hold for an extra second.",
+                  title: 'Logo ở đoạn kết',
+                  desc: 'Logo nên to hơn một chút, giữ lâu hơn và thêm chuyển động mượt hơn.',
                   author: 'Maya Chen',
-                  ago: '1 day ago',
-                  status: 'FIXED',
+                  ago: '1 ngày trước',
+                  status: 'ĐÃ SỬA',
                   avatar: 'MK',
                   avatarBg: 'bg-[#c29d72]'
                 }
@@ -399,9 +405,9 @@ export const Dashboard: React.FC = () => {
                 <div
                   key={item.id}
                   onClick={() => setActiveTab('review')}
-                  className="p-3 bg-[#0c1017] hover:bg-[#151c28] border border-[#1f293d] rounded-xl cursor-pointer transition flex items-start gap-3 group"
+                  className="p-3 bg-slate-50 hover:bg-slate-100/80 border border-slate-200/70 rounded-xl cursor-pointer transition-colors flex items-start gap-3 group"
                 >
-                  <div className="relative w-16 h-11 bg-slate-800 rounded-lg overflow-hidden shrink-0 border border-[#2a364e]">
+                  <div className="relative w-16 h-11 bg-slate-200 rounded-lg overflow-hidden shrink-0 border border-slate-300">
                     <img
                       src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80"
                       alt="Thumbnail"
@@ -414,19 +420,19 @@ export const Dashboard: React.FC = () => {
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <p className="text-xs font-bold text-white truncate">{item.title}</p>
+                      <p className="text-xs font-bold text-slate-900 truncate">{item.title}</p>
                       <span
                         className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase ${
-                          item.status === 'OPEN'
-                            ? 'bg-red-500/10 text-red-400 border-red-500/20'
-                            : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                          item.status === 'ĐANG MỞ'
+                            ? 'bg-red-50 text-red-600 border-red-200'
+                            : 'bg-emerald-50 text-emerald-600 border-emerald-200'
                         }`}
                       >
                         {item.status}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">{item.desc}</p>
-                    <div className="flex items-center gap-1.5 mt-1.5 text-[10px] text-slate-500">
+                    <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{item.desc}</p>
+                    <div className="flex items-center gap-1.5 mt-1.5 text-[10px] text-slate-400">
                       <div className={`w-3.5 h-3.5 rounded-full ${item.avatarBg} flex items-center justify-center text-[8px] font-bold text-white`}>
                         {item.avatar}
                       </div>
@@ -434,7 +440,7 @@ export const Dashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  <button className="text-slate-500 hover:text-slate-300 transition p-1">
+                  <button type="button" className="text-slate-400 hover:text-slate-600 transition-colors p-1">
                     <MoreVertical className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -444,72 +450,75 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* 4. Bottom Row: 3 Cards (Project Goals, Key Dates, Team) */}
+      {/* 4. Bottom Row: 3 Cards (Mục tiêu dự án, Mốc thời gian, Nhóm) */}
       <div className="grid grid-cols-3 gap-6">
-        {/* Card 1: Project Goals */}
-        <div className="bg-[#131923] border border-[#1f293d] rounded-2xl p-5 flex flex-col justify-between">
+        {/* Card 1: Mục tiêu dự án */}
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 flex flex-col justify-between shadow-2xs">
           <div className="space-y-3">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-[#132a4a] border border-blue-500/20 flex items-center justify-center text-blue-400">
+              <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
                 <Target className="w-4 h-4" />
               </div>
-              <h3 className="text-sm font-bold text-white">Project Goals</h3>
+              <h3 className="text-sm font-bold text-slate-900">Mục tiêu dự án</h3>
             </div>
-            <p className="text-xs text-slate-400 leading-relaxed">
+            <p className="text-xs text-slate-500 leading-relaxed">
               {activeProject.description ||
-                "Showcase UTH's people, campus and impact through a 45–60s brand film for web and social."}
+                'Giới thiệu con người, môi trường và tác động của UTH thông qua một video thương hiệu 45–60 giây cho web và mạng xã hội.'}
             </p>
           </div>
 
-          <button className="mt-4 w-fit px-3 py-1.5 bg-[#0c1017] hover:bg-[#18202f] border border-[#1f293d] rounded-xl text-xs font-semibold text-slate-300 flex items-center gap-2 transition">
+          <button
+            type="button"
+            className="mt-4 w-fit px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 flex items-center gap-2 transition-colors"
+          >
             <FileText className="w-3.5 h-3.5 text-slate-400" />
-            <span>View brief</span>
+            <span>Xem brief</span>
           </button>
         </div>
 
-        {/* Card 2: Key Dates */}
-        <div className="bg-[#131923] border border-[#1f293d] rounded-2xl p-5 flex flex-col justify-between">
+        {/* Card 2: Mốc thời gian */}
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 flex flex-col justify-between shadow-2xs">
           <div className="flex items-center gap-2.5 mb-3">
-            <div className="w-8 h-8 rounded-xl bg-[#132a4a] border border-blue-500/20 flex items-center justify-center text-blue-400">
+            <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
               <Calendar className="w-4 h-4" />
             </div>
-            <h3 className="text-sm font-bold text-white">Key Dates</h3>
+            <h3 className="text-sm font-bold text-slate-900">Mốc thời gian</h3>
           </div>
 
           <div className="space-y-2.5 text-xs">
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">Rough cut</span>
+              <span className="text-slate-500">Dựng thô</span>
               <div className="flex items-center gap-2">
-                <span className="text-slate-300 font-mono text-[11px]">Mar 20, 2025</span>
-                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-slate-700 font-mono text-[11px]">20 thg 3, 2025</span>
+                <Check className="w-3.5 h-3.5 text-emerald-500" />
               </div>
             </div>
 
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">Client review</span>
+              <span className="text-slate-500">Duyệt khách hàng</span>
               <div className="flex items-center gap-2">
-                <span className="text-slate-300 font-mono text-[11px]">Apr 5, 2025</span>
-                <span className="w-2.5 h-2.5 rounded-full border-2 border-blue-500 inline-block" />
+                <span className="text-slate-700 font-mono text-[11px]">5 thg 4, 2025</span>
+                <span className="w-2.5 h-2.5 rounded-full border-2 border-blue-600 inline-block" />
               </div>
             </div>
 
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">Final delivery</span>
+              <span className="text-slate-500">Bàn giao cuối cùng</span>
               <div className="flex items-center gap-2">
-                <span className="text-slate-300 font-mono text-[11px]">Apr 12, 2025</span>
-                <span className="w-2.5 h-2.5 rounded-full border-2 border-slate-600 inline-block" />
+                <span className="text-slate-700 font-mono text-[11px]">12 thg 4, 2025</span>
+                <span className="w-2.5 h-2.5 rounded-full border-2 border-slate-300 inline-block" />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Card 3: Team */}
-        <div className="bg-[#131923] border border-[#1f293d] rounded-2xl p-5 flex flex-col justify-between">
+        {/* Card 3: Nhóm */}
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 flex flex-col justify-between shadow-2xs">
           <div className="flex items-center gap-2.5 mb-3">
-            <div className="w-8 h-8 rounded-xl bg-[#132a4a] border border-blue-500/20 flex items-center justify-center text-blue-400">
+            <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
               <Users className="w-4 h-4" />
             </div>
-            <h3 className="text-sm font-bold text-white">Team</h3>
+            <h3 className="text-sm font-bold text-slate-900">Nhóm</h3>
           </div>
 
           <div className="space-y-2">
@@ -518,35 +527,38 @@ export const Dashboard: React.FC = () => {
                 <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-[9px] font-bold text-white">
                   JD
                 </div>
-                <span className="text-xs font-semibold text-white">Jordan Dell</span>
+                <span className="text-xs font-semibold text-slate-800">Jordan Dell</span>
               </div>
-              <span className="text-[11px] text-slate-400">Project Lead</span>
+              <span className="text-[11px] text-slate-500">Trưởng dự án</span>
             </div>
 
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-[#64748b] flex items-center justify-center text-[9px] font-bold text-white">
+                <div className="w-6 h-6 rounded-full bg-slate-500 flex items-center justify-center text-[9px] font-bold text-white">
                   AL
                 </div>
-                <span className="text-xs font-semibold text-white">Alex Lee</span>
+                <span className="text-xs font-semibold text-slate-800">Alex Lee</span>
               </div>
-              <span className="text-[11px] text-slate-400">Producer</span>
+              <span className="text-[11px] text-slate-500">Nhà sản xuất</span>
             </div>
 
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-[#c29d72] flex items-center justify-center text-[9px] font-bold text-white">
+                <div className="w-6 h-6 rounded-full bg-[#f59e0b] flex items-center justify-center text-[9px] font-bold text-white">
                   MK
                 </div>
-                <span className="text-xs font-semibold text-white">Maya Chen</span>
+                <span className="text-xs font-semibold text-slate-800">Maya Chen</span>
               </div>
-              <span className="text-[11px] text-slate-400">Editor</span>
+              <span className="text-[11px] text-slate-500">Biên tập viên</span>
             </div>
           </div>
 
-          <button className="mt-3 flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 font-medium transition">
+          <button
+            type="button"
+            className="mt-3 flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium transition-colors"
+          >
             <Plus className="w-3.5 h-3.5" />
-            <span>Add team member</span>
+            <span>Thêm thành viên</span>
           </button>
         </div>
       </div>

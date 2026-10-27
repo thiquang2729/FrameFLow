@@ -9,28 +9,22 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: '#0c1017',
+        background: '#f8fafc',
         surface: {
-          DEFAULT: '#131923',
-          card: '#131923',
-          subtle: '#0e141f',
-          hover: '#18202f',
-          active: '#1a2538'
+          DEFAULT: '#ffffff',
+          card: '#ffffff',
+          subtle: '#f1f5f9',
+          hover: '#f8fafc',
+          active: '#e2e8f0'
         },
         border: {
-          DEFAULT: '#1f293d',
-          subtle: '#172030'
+          DEFAULT: '#e2e8f0',
+          subtle: '#cbd5e1'
         },
         primary: {
-          DEFAULT: '#1d6bf3',
-          hover: '#185cd4',
-          subtle: '#132a4a'
-        },
-        accent: {
-          blue: '#3b82f6',
-          purple: '#8b5cf6',
-          emerald: '#10b981',
-          coral: '#f43f5e'
+          DEFAULT: '#2563eb',
+          hover: '#1d4ed8',
+          subtle: '#eff6ff'
         }
       }
     }

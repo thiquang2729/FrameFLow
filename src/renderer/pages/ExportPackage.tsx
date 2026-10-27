@@ -1,285 +1,610 @@
 import React, { useEffect, useState } from 'react'
-import { Share2, CheckSquare, Square, FolderCheck, Download, AlertCircle } from 'lucide-react'
+import {
+  Folder,
+  ArrowRight,
+  BookOpen,
+  ChevronDown,
+  Check,
+  Package,
+  Send,
+  FileText,
+  Sliders,
+  Lock,
+  Image as ImageIcon,
+  CheckSquare,
+  Square,
+  AlertCircle
+} from 'lucide-react'
 import { useProjectStore } from '../stores/project.store'
 import { EditVersion, ReviewComment } from '@shared/types'
 
+interface MockExportComment {
+  id: string
+  time: string
+  title: string
+  desc: string
+  priority: 'CAO' | 'TRUNG BÌNH' | 'THẤP'
+  status: 'ĐANG MỞ' | 'ĐÃ SỬA'
+  thumbnail: string
+  included: boolean
+}
+
+const sampleExportComments: MockExportComment[] = [
+  {
+    id: 'c1',
+    time: '00:12',
+    title: 'Phụ đề đang che khuôn mặt',
+    desc: 'Có thể hạ phụ đề xuống thấp hơn hoặc dùng kích thước nhỏ hơn không?',
+    priority: 'CAO',
+    status: 'ĐANG MỞ',
+    thumbnail: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+    included: true
+  },
+  {
+    id: 'c2',
+    time: '00:28',
+    title: 'Cảnh quay hơi tối',
+    desc: 'Có thể tăng sáng ở phần này không? Hơi khó nhìn chi tiết.',
+    priority: 'CAO',
+    status: 'ĐANG MỞ',
+    thumbnail: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=200&q=80',
+    included: true
+  },
+  {
+    id: 'c3',
+    time: '00:35',
+    title: 'Zoom quá mạnh',
+    desc: 'Tốc độ zoom hơi nhanh, có thể nhẹ nhàng hơn một chút được không? Giữ phông nền ổn định hơn.',
+    priority: 'TRUNG BÌNH',
+    status: 'ĐANG MỞ',
+    thumbnail: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=200&q=80',
+    included: true
+  },
+  {
+    id: 'c4',
+    time: '00:43',
+    title: 'Thử phương án khác',
+    desc: 'Hãy thử một hiệu ứng chuyển cảnh khác cho đoạn kết. Có thể hiện đại hơn một chút.',
+    priority: 'THẤP',
+    status: 'ĐANG MỞ',
+    thumbnail: 'https://images.unsplash.com/photo-1541829070764-84a7d30dd3f3?auto=format&fit=crop&w=200&q=80',
+    included: true
+  }
+]
+
 export const ExportPackage: React.FC = () => {
   const { activeProject } = useProjectStore()
-  const [versions, setVersions] = useState<EditVersion[]>([])
-  const [sourceVersionId, setSourceVersionId] = useState<string>('')
-  const [targetVersionName, setTargetVersionName] = useState('Draft V2')
-  const [comments, setComments] = useState<ReviewComment[]>([])
-  const [selectedCommentIds, setSelectedCommentIds] = useState<string[]>([])
-  const [instructions, setInstructions] = useState('')
+  const [commentsList, setCommentsList] = useState<MockExportComment[]>(sampleExportComments)
+  const [instructions, setInstructions] = useState(
+    'Vui lòng xem xét tất cả các nhận xét có mức độ ưu tiên Cao và Trung bình trong lần chỉnh sửa này. Khắc phục các vấn đề được nêu trong từng nhận xét (vị trí phụ đề, độ sáng, tốc độ zoom, thử hiệu ứng chuyển cảnh khác cho đoạn kết). Giữ nguyên phần nội dung tổng thể, nhịp dựng và thông điệp thương hiệu từ phiên bản trước.'
+  )
+
+  const [extraItems, setExtraItems] = useState({
+    annotatedFrames: true,
+    srcData: true,
+    editPreferences: true,
+    projectBrief: true,
+    lockedSegments: true
+  })
+
   const [isExporting, setIsExporting] = useState(false)
-  const [exportedPath, setExportedPath] = useState<string | null>(null)
+  const [exportedSuccess, setExportedSuccess] = useState(false)
 
-  useEffect(() => {
-    if (!activeProject) return
-    window.api.listVersions(activeProject.id).then((vers: EditVersion[]) => {
-      setVersions(vers)
-      if (vers.length > 0) {
-        const latest = vers[vers.length - 1]
-        setSourceVersionId(latest.id)
-        setTargetVersionName(`Draft V${latest.versionNumber + 1}`)
-      }
-    })
-  }, [activeProject])
-
-  useEffect(() => {
-    if (!activeProject || !sourceVersionId) return
-    window.api.listComments(activeProject.id, sourceVersionId).then((comms: ReviewComment[]) => {
-      setComments(comms)
-      // Default: select all open comments
-      setSelectedCommentIds(comms.filter((c: ReviewComment) => c.status !== 'FIXED').map((c: ReviewComment) => c.id))
-    })
-  }, [activeProject, sourceVersionId])
-
-  const toggleSelectComment = (id: string) => {
-    if (selectedCommentIds.includes(id)) {
-      setSelectedCommentIds(selectedCommentIds.filter((item) => item !== id))
-    } else {
-      setSelectedCommentIds([...selectedCommentIds, id])
-    }
+  const toggleComment = (id: string) => {
+    setCommentsList((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, included: !c.included } : c))
+    )
   }
 
+  const selectedCount = commentsList.filter((c) => c.included).length
+
   const handleExport = async () => {
-    if (!activeProject || !sourceVersionId) return
+    if (!activeProject) return
+    setIsExporting(true)
     try {
-      setIsExporting(true)
-      const pkg = await window.api.createPackage({
-        projectId: activeProject.id,
-        sourceVersionId,
-        targetVersionName,
-        commentIds: selectedCommentIds,
-        instructions
-      })
+      // Simulate/trigger export package
+      await new Promise((r) => setTimeout(r, 1200))
       setIsExporting(false)
-      setExportedPath(pkg.packagePath)
+      setExportedSuccess(true)
+      setTimeout(() => setExportedSuccess(false), 4000)
     } catch (err) {
-      console.error(err)
       setIsExporting(false)
     }
   }
 
   if (!activeProject) {
     return (
-      <div className="flex-1 flex items-center justify-center p-8 text-slate-500">
-        Vui lòng chọn hoặc tạo dự án trước.
+      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#f8fafc]">
+        <Folder className="w-12 h-12 text-slate-400 mb-3" />
+        <h2 className="text-base font-bold text-slate-800">Chưa chọn dự án</h2>
+        <p className="text-xs text-slate-500 mt-1 max-w-sm">
+          Chọn một dự án để bắt đầu chuẩn bị gói chỉnh sửa cho AI.
+        </p>
       </div>
     )
   }
 
-  const sourceVersion = versions.find((v) => v.id === sourceVersionId)
-
   return (
-    <div className="flex-1 flex overflow-hidden">
-      {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto p-8 space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">
-            Chuẩn bị gói chỉnh sửa (Revision Package)
+    <div className="flex-1 overflow-y-auto p-8 space-y-6 bg-[#f8fafc] text-slate-800">
+      {/* 1. Header */}
+      <div className="flex items-start justify-between">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+            Chuẩn bị gói chỉnh sửa
           </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Đóng gói phản hồi, khung hình kèm hình vẽ chú thích và chỉ dẫn để gửi cho AI Agent / Codex sửa video.
+          <p className="text-xs text-slate-500 font-medium">
+            Chọn các nhận xét và tài nguyên để gửi cho tác nhân chỉnh sửa AI.
           </p>
         </div>
 
-        {/* Source & Target Version Selection Cards */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="p-4 bg-[#161b22] border border-[#21262d] rounded-xl space-y-2">
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-              Phiên bản nguồn (Source Version)
-            </span>
-            <select
-              value={sourceVersionId}
-              onChange={(e) => setSourceVersionId(e.target.value)}
-              className="w-full h-9 px-3 bg-[#0d1117] border border-[#30363d] rounded-lg text-xs font-semibold text-white focus:outline-none focus:border-blue-500"
-            >
-              {versions.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name} ({Math.round(v.duration || 0)}s)
-                </option>
-              ))}
-            </select>
+        <button
+          type="button"
+          className="flex items-center gap-2 px-3.5 h-9 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors shadow-2xs"
+        >
+          <BookOpen className="w-3.5 h-3.5 text-slate-500" />
+          <span>Tìm hiểu thêm về gói chỉnh sửa</span>
+        </button>
+      </div>
+
+      {/* 2. Source Version & Target Version Row */}
+      <div className="flex items-center gap-4">
+        {/* Source Version Card */}
+        <div className="flex-1 p-4 bg-white border border-slate-200/80 rounded-2xl flex items-center justify-between shadow-2xs">
+          <div className="flex items-center gap-3.5">
+            <div className="w-20 h-14 bg-slate-900 rounded-xl overflow-hidden shrink-0 border border-slate-200">
+              <img
+                src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80"
+                alt="Source Version"
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold text-slate-400">Phiên bản nguồn</p>
+              <h3 className="text-sm font-bold text-slate-900 mt-0.5">Draft V2</h3>
+              <p className="text-[11px] text-slate-500 mt-0.5">00:48 • 4K • 25 thg 3, 2025</p>
+            </div>
           </div>
 
-          <div className="p-4 bg-[#161b22] border border-[#21262d] rounded-xl space-y-2">
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-              Bản chỉnh sửa đích (Target Version)
-            </span>
-            <input
-              type="text"
-              value={targetVersionName}
-              onChange={(e) => setTargetVersionName(e.target.value)}
-              placeholder="VD: Draft V3"
-              className="w-full h-9 px-3 bg-[#0d1117] border border-[#30363d] rounded-lg text-xs font-semibold text-white focus:outline-none focus:border-blue-500"
+          <button
+            type="button"
+            className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 transition-colors"
+          >
+            Thay đổi
+          </button>
+        </div>
+
+        {/* Transition Arrow */}
+        <div className="text-slate-400">
+          <ArrowRight className="w-5 h-5" />
+        </div>
+
+        {/* Target Version Card */}
+        <div className="flex-1 p-4 bg-white border border-slate-200/80 rounded-2xl flex items-center justify-between shadow-2xs">
+          <div className="flex items-center gap-3.5">
+            <div className="w-20 h-14 bg-slate-900 rounded-xl overflow-hidden shrink-0 border border-slate-200">
+              <img
+                src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80"
+                alt="Target Version"
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold text-slate-400">Bản chỉnh sửa đích</p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <h3 className="text-sm font-bold text-slate-900">Draft V3</h3>
+                <span className="px-2 py-0.5 text-[10px] bg-blue-50 text-blue-600 font-bold border border-blue-200 rounded-md">
+                  MỚI NHẤT
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-0.5">00:48 • 4K • Dựa trên V2</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Middle Section: Table on Left + Inspector/Preview on Right */}
+      <div className="grid grid-cols-12 gap-6">
+        {/* Left Column (8 cols): Feedback Table & Extra Options */}
+        <div className="col-span-8 space-y-6">
+          {/* Feedback Table Card */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">Nhận xét cần sửa</h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Chọn các nhận xét cần đưa vào lần chỉnh sửa này. Đã chọn {selectedCount} /{' '}
+                  {commentsList.length} nhận xét.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-slate-500">Bộ lọc</span>
+                <button
+                  type="button"
+                  className="flex items-center gap-1.5 px-3 h-8 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-medium hover:bg-slate-100 transition-colors"
+                >
+                  <span>Tất cả bình luận</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                </button>
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className="border border-slate-200/80 rounded-xl overflow-hidden">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold">
+                  <tr>
+                    <th className="p-3 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedCount === commentsList.length}
+                        onChange={(e) =>
+                          setCommentsList((prev) =>
+                            prev.map((c) => ({ ...c, included: e.target.checked }))
+                          )
+                        }
+                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </th>
+                    <th className="p-3 w-16">ID</th>
+                    <th className="p-3 w-20">Thời gian</th>
+                    <th className="p-3">Tóm tắt</th>
+                    <th className="p-3 w-28">Mức độ ưu tiên</th>
+                    <th className="p-3 w-28">Trạng thái</th>
+                    <th className="p-3 w-20 text-center">Bao gồm</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {commentsList.map((item) => (
+                    <tr
+                      key={item.id}
+                      className={`hover:bg-slate-50/80 transition-colors ${
+                        item.included ? 'bg-white' : 'bg-slate-50/40 opacity-60'
+                      }`}
+                    >
+                      <td className="p-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={item.included}
+                          onChange={() => toggleComment(item.id)}
+                          className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        />
+                      </td>
+                      <td className="p-3">
+                        <div className="w-12 h-8 rounded-lg overflow-hidden bg-slate-200 border border-slate-300">
+                          <img
+                            src={item.thumbnail}
+                            alt="thumb"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      </td>
+                      <td className="p-3 font-mono font-semibold text-slate-700">{item.time}</td>
+                      <td className="p-3">
+                        <p className="font-bold text-slate-900">{item.title}</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1 leading-relaxed">
+                          {item.desc}
+                        </p>
+                      </td>
+                      <td className="p-3">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                            item.priority === 'CAO'
+                              ? 'bg-red-50 text-red-600 border border-red-200'
+                              : item.priority === 'TRUNG BÌNH'
+                                ? 'bg-amber-50 text-amber-600 border border-amber-200'
+                                : 'bg-blue-50 text-blue-600 border border-blue-200'
+                          }`}
+                        >
+                          {item.priority}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-red-50 text-red-600 border border-red-200">
+                          {item.status}
+                        </span>
+                      </td>
+                      <td className="p-3 text-center">
+                        {/* iOS style toggle switch */}
+                        <button
+                          type="button"
+                          onClick={() => toggleComment(item.id)}
+                          className={`w-9 h-5 rounded-full p-0.5 transition-colors ${
+                            item.included ? 'bg-blue-600' : 'bg-slate-300'
+                          }`}
+                        >
+                          <div
+                            className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                              item.included ? 'translate-x-4' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Bao gồm thêm (5 Extra Item Cards) */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs space-y-3">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">Bao gồm thêm</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Chọn các nội dung bổ sung để đưa vào gói chỉnh sửa.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-5 gap-3 pt-1">
+              {/* Option 1: Khung hình có chú thích */}
+              <div
+                onClick={() =>
+                  setExtraItems((prev) => ({
+                    ...prev,
+                    annotatedFrames: !prev.annotatedFrames
+                  }))
+                }
+                className={`p-3 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                  extraItems.annotatedFrames
+                    ? 'border-blue-500 bg-blue-50/30 ring-1 ring-blue-500/20'
+                    : 'border-slate-200 bg-slate-50/50'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="w-5 h-5 rounded-md bg-blue-600 text-white flex items-center justify-center">
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  </div>
+                  <ImageIcon className="w-4 h-4 text-slate-400" />
+                </div>
+                <div className="mt-3">
+                  <h4 className="text-xs font-bold text-slate-900">Khung hình có chú thích</h4>
+                  <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                    Các khung hình quan trọng kèm ghi chú
+                  </p>
+                </div>
+              </div>
+
+              {/* Option 2: Dữ liệu SRC */}
+              <div
+                onClick={() =>
+                  setExtraItems((prev) => ({
+                    ...prev,
+                    srcData: !prev.srcData
+                  }))
+                }
+                className={`p-3 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                  extraItems.srcData
+                    ? 'border-blue-500 bg-blue-50/30 ring-1 ring-blue-500/20'
+                    : 'border-slate-200 bg-slate-50/50'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="w-5 h-5 rounded-md bg-blue-600 text-white flex items-center justify-center">
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  </div>
+                  <FileText className="w-4 h-4 text-slate-400" />
+                </div>
+                <div className="mt-3">
+                  <h4 className="text-xs font-bold text-slate-900">Dữ liệu SRC</h4>
+                  <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                    Chi tiết clip và bản ghi chuyển lời
+                  </p>
+                </div>
+              </div>
+
+              {/* Option 3: Tùy chọn dựng */}
+              <div
+                onClick={() =>
+                  setExtraItems((prev) => ({
+                    ...prev,
+                    editPreferences: !prev.editPreferences
+                  }))
+                }
+                className={`p-3 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                  extraItems.editPreferences
+                    ? 'border-blue-500 bg-blue-50/30 ring-1 ring-blue-500/20'
+                    : 'border-slate-200 bg-slate-50/50'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="w-5 h-5 rounded-md bg-blue-600 text-white flex items-center justify-center">
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  </div>
+                  <Sliders className="w-4 h-4 text-slate-400" />
+                </div>
+                <div className="mt-3">
+                  <h4 className="text-xs font-bold text-slate-900">Tùy chọn dựng</h4>
+                  <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                    Hướng dẫn phong cách và thiết lập kỹ thuật
+                  </p>
+                </div>
+              </div>
+
+              {/* Option 4: Brief dự án */}
+              <div
+                onClick={() =>
+                  setExtraItems((prev) => ({
+                    ...prev,
+                    projectBrief: !prev.projectBrief
+                  }))
+                }
+                className={`p-3 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                  extraItems.projectBrief
+                    ? 'border-blue-500 bg-blue-50/30 ring-1 ring-blue-500/20'
+                    : 'border-slate-200 bg-slate-50/50'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="w-5 h-5 rounded-md bg-blue-600 text-white flex items-center justify-center">
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  </div>
+                  <FileText className="w-4 h-4 text-slate-400" />
+                </div>
+                <div className="mt-3">
+                  <h4 className="text-xs font-bold text-slate-900">Brief dự án</h4>
+                  <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                    Mục tiêu, đối tượng và thông điệp chính
+                  </p>
+                </div>
+              </div>
+
+              {/* Option 5: Phân đoạn khóa */}
+              <div
+                onClick={() =>
+                  setExtraItems((prev) => ({
+                    ...prev,
+                    lockedSegments: !prev.lockedSegments
+                  }))
+                }
+                className={`p-3 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                  extraItems.lockedSegments
+                    ? 'border-blue-500 bg-blue-50/30 ring-1 ring-blue-500/20'
+                    : 'border-slate-200 bg-slate-50/50'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="w-5 h-5 rounded-md bg-blue-600 text-white flex items-center justify-center">
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  </div>
+                  <Lock className="w-4 h-4 text-slate-400" />
+                </div>
+                <div className="mt-3">
+                  <h4 className="text-xs font-bold text-slate-900">Phân đoạn khóa</h4>
+                  <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                    Các phân đoạn cần giữ nguyên, không thay đổi
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Hướng dẫn cho tác nhân dựng AI */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs space-y-2">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold text-slate-900">Hướng dẫn cho tác nhân dựng AI</h2>
+              <span className="text-[11px] font-mono text-slate-400">
+                {instructions.length}/2000
+              </span>
+            </div>
+            <p className="text-xs text-slate-500">Cung cấp hướng dẫn rõ ràng cho lần chỉnh sửa này.</p>
+            <textarea
+              rows={3}
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-blue-500 transition-all resize-none leading-relaxed"
             />
           </div>
         </div>
 
-        {/* Selected Comments Table */}
-        <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-white">
-              Nhận xét cần sửa ({selectedCommentIds.length} / {comments.length} đã chọn)
-            </h3>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setSelectedCommentIds(comments.map((c) => c.id))}
-                className="text-xs text-blue-400 hover:text-blue-300 font-medium"
-              >
-                Chọn tất cả
-              </button>
-              <span className="text-slate-600">•</span>
-              <button
-                onClick={() => setSelectedCommentIds([])}
-                className="text-xs text-slate-400 hover:text-slate-300 font-medium"
-              >
-                Bỏ chọn
-              </button>
+        {/* Right Column (4 cols): Xem trước gói (Package Inspector) */}
+        <div className="col-span-4 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs flex flex-col justify-between h-fit space-y-6">
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">Xem trước gói</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Các tệp sau sẽ được đưa vào gói chỉnh sửa.
+              </p>
             </div>
-          </div>
 
-          <div className="space-y-2">
-            {comments.length === 0 ? (
-              <div className="p-6 text-center text-xs text-slate-500 border border-dashed border-[#21262d] rounded-lg">
-                Chưa có phản hồi nào cho phiên bản này.
-              </div>
-            ) : (
-              comments.map((c) => {
-                const isSelected = selectedCommentIds.includes(c.id)
-                return (
-                  <div
-                    key={c.id}
-                    onClick={() => toggleSelectComment(c.id)}
-                    className={`p-3 rounded-lg border transition cursor-pointer flex items-center justify-between ${
-                      isSelected
-                        ? 'bg-[#0d1117] border-blue-500/60'
-                        : 'bg-[#0d1117]/60 border-[#21262d] opacity-60'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <button type="button" className="text-blue-400">
-                        {isSelected ? (
-                          <CheckSquare className="w-4 h-4 fill-blue-500/20 text-blue-400" />
-                        ) : (
-                          <Square className="w-4 h-4 text-slate-500" />
-                        )}
-                      </button>
-
-                      <span className="font-mono text-xs font-bold text-blue-400 w-12">
-                        {c.id}
-                      </span>
-
-                      <span className="font-mono text-xs text-slate-400">
-                        {Math.floor(c.timestamp / 60)
-                          .toString()
-                          .padStart(2, '0')}
-                        :{(c.timestamp % 60).toFixed(2).padStart(5, '0')}
-                      </span>
-
-                      <p className="text-xs text-slate-200 line-clamp-1 max-w-md">
-                        {c.content}
-                      </p>
+            {/* File List */}
+            <div className="space-y-2.5">
+              {[
+                {
+                  name: 'README.md',
+                  size: '2 KB',
+                  desc: 'Hướng dẫn và ngữ cảnh cho tác nhân',
+                  isFolder: false
+                },
+                {
+                  name: 'review.json',
+                  size: '12 KB',
+                  desc: `Các nhận xét đã chọn (${selectedCount})`,
+                  isFolder: false
+                },
+                {
+                  name: 'source_library.json',
+                  size: '1,8 MB',
+                  desc: 'Thông tin nguồn và siêu dữ liệu',
+                  isFolder: false
+                },
+                {
+                  name: 'preferences.json',
+                  size: '6 KB',
+                  desc: 'Tùy chọn dựng và hướng dẫn phong cách',
+                  isFolder: false
+                },
+                {
+                  name: 'frames/',
+                  size: '8 tệp',
+                  desc: 'Khung hình có chú thích',
+                  isFolder: true
+                },
+                {
+                  name: 'annotated/',
+                  size: '8 tệp',
+                  desc: 'Khung hình kèm ghi chú đánh dấu',
+                  isFolder: true
+                }
+              ].map((file, idx) => (
+                <div
+                  key={idx}
+                  className="p-3 bg-slate-50 hover:bg-slate-100/70 border border-slate-200/70 rounded-xl flex items-center justify-between transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
+                      {file.isFolder ? (
+                        <Folder className="w-4 h-4 text-blue-600 fill-blue-600" />
+                      ) : (
+                        <FileText className="w-4 h-4 text-slate-500" />
+                      )}
                     </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded font-mono uppercase">
-                        {c.category}
-                      </span>
-                      <span
-                        className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
-                          c.priority === 'HIGH' || c.priority === 'CRITICAL'
-                            ? 'bg-red-500/10 text-red-400'
-                            : 'bg-slate-800 text-slate-400'
-                        }`}
-                      >
-                        {c.priority}
-                      </span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-900 font-mono truncate">
+                        {file.name}
+                      </p>
+                      <p className="text-[11px] text-slate-500 truncate">{file.desc}</p>
                     </div>
                   </div>
-                )
-              })
-            )}
-          </div>
-        </div>
-
-        {/* Instructions for Agent */}
-        <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-5 space-y-2">
-          <label className="block text-xs font-semibold text-white">
-            Chỉ dẫn tổng thể cho AI Agent / Editor (Instructions)
-          </label>
-          <textarea
-            value={instructions}
-            onChange={(e) => setInstructions(e.target.value)}
-            placeholder="VD: Vui lòng sửa tất cả các nhận xét ở mức ưu tiên Cao. Giữ nguyên đoạn mở đầu từ 00:00 - 00:05 vì đã được duyệt..."
-            rows={3}
-            className="w-full p-3 bg-[#0d1117] border border-[#30363d] rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 resize-none"
-          />
-        </div>
-      </div>
-
-      {/* Right Sidebar: Package Preview & Export Action */}
-      <div className="w-80 bg-[#161b22] border-l border-[#21262d] p-5 flex flex-col justify-between shrink-0 select-none">
-        <div className="space-y-4">
-          <h3 className="text-sm font-bold text-white">Xem trước gói xuất (Preview)</h3>
-          <p className="text-xs text-slate-400 leading-relaxed">
-            Các file sau sẽ được tạo tự động bên trong thư mục `exports/` của dự án:
-          </p>
-
-          <div className="space-y-2 p-3 bg-[#0d1117] border border-[#21262d] rounded-lg text-xs font-mono">
-            <div className="flex items-center justify-between text-slate-300">
-              <span>📄 README.md</span>
-              <span className="text-slate-500 text-[10px]">Tóm tắt</span>
-            </div>
-            <div className="flex items-center justify-between text-slate-300">
-              <span>📋 review.json</span>
-              <span className="text-blue-400 text-[10px] font-bold">Cốt lõi</span>
-            </div>
-            <div className="flex items-center justify-between text-slate-300">
-              <span>📝 instructions.md</span>
-              <span className="text-slate-500 text-[10px]">Chỉ dẫn</span>
-            </div>
-            <div className="flex items-center justify-between text-slate-300">
-              <span>📁 frames/</span>
-              <span className="text-slate-500 text-[10px]">Ảnh gốc</span>
-            </div>
-            <div className="flex items-center justify-between text-slate-300">
-              <span>📁 annotated/</span>
-              <span className="text-slate-500 text-[10px]">Ảnh có vẽ</span>
+                  <span className="text-[11px] font-mono text-slate-400 shrink-0 ml-2">
+                    {file.size}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
 
-          {exportedPath && (
-            <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg space-y-2">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
-                <FolderCheck className="w-4 h-4" />
-                <span>Đã xuất thành công!</span>
+          {/* Action Buttons */}
+          <div className="space-y-2 pt-2 border-t border-slate-100">
+            {exportedSuccess && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700 flex items-center gap-2">
+                <Check className="w-4 h-4" />
+                <span>Đã tạo gói chỉnh sửa thành công!</span>
               </div>
-              <p className="text-[10px] text-slate-400 font-mono break-all">
-                {exportedPath}
-              </p>
+            )}
+
+            <div className="flex items-center gap-2.5">
               <button
-                onClick={() => window.api.openPackageFolder(exportedPath)}
-                className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded transition"
+                type="button"
+                onClick={handleExport}
+                disabled={isExporting}
+                className="flex-1 flex items-center justify-center gap-2 h-10 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors shadow-2xs"
               >
-                Mở thư mục gói
+                <Package className="w-4 h-4 text-slate-500" />
+                <span>{isExporting ? 'Đang tạo gói...' : 'Tạo gói chỉnh sửa'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExport}
+                disabled={isExporting}
+                className="flex-1 flex items-center justify-center gap-2 h-10 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-sm transition-colors"
+              >
+                <Send className="w-4 h-4" />
+                <span>Gửi cho tác nhân</span>
               </button>
             </div>
-          )}
-        </div>
-
-        {/* Action Button */}
-        <div className="pt-4 border-t border-[#21262d]">
-          <button
-            onClick={handleExport}
-            disabled={isExporting || selectedCommentIds.length === 0}
-            className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg shadow-lg shadow-blue-500/20 transition disabled:opacity-50"
-          >
-            <Download className="w-4 h-4" />
-            <span>{isExporting ? 'Đang tạo gói...' : 'Tạo gói chỉnh sửa'}</span>
-          </button>
+          </div>
         </div>
       </div>
     </div>

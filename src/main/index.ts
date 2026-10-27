@@ -1,4 +1,4 @@
-import { app, BrowserWindow, protocol, net } from 'electron'
+import { app, BrowserWindow, protocol, net, Menu } from 'electron'
 import { join } from 'path'
 import fs from 'fs'
 import { is } from '@electron-toolkit/utils'
@@ -8,6 +8,9 @@ import { ReviewService } from './services/review.service'
 import { SourceService } from './services/source.service'
 import { ExportService } from './services/export.service'
 import { registerIpcHandlers } from './ipc/register-ipc'
+
+// Completely disable native application menu on Windows to prevent flickering/resizing
+Menu.setApplicationMenu(null)
 
 let mainWindow: BrowserWindow | null = null
 
@@ -22,15 +25,19 @@ function createWindow(): void {
     minWidth: 1100,
     minHeight: 700,
     show: false,
-    autoHideMenuBar: true,
-    title: 'FrameFlow — AI-assisted Video Review Workspace',
-    backgroundColor: '#0d1117',
+    autoHideMenuBar: false, // Don't auto-hide, we explicitly remove it below
+    title: 'FrameFlow — Không gian duyệt video AI',
+    backgroundColor: '#0c1017',
     webPreferences: {
       preload: preloadPath,
       sandbox: false,
       webSecurity: false // Allows streaming local video and local frame snapshots
     }
   })
+
+  // Completely strip native menu bar to eliminate any layout jitter
+  mainWindow.removeMenu()
+  mainWindow.setMenuBarVisibility(false)
 
   mainWindow.on('ready-to-show', () => {
     mainWindow?.show()

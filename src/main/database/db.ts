@@ -36,11 +36,112 @@ export class DatabaseManager {
     if (fs.existsSync(this.dbPath)) {
       const fileBuffer = fs.readFileSync(this.dbPath)
       this.db = new engine.Database(fileBuffer)
+      this.initSchema()
+      this.seedSampleDataIfEmpty()
     } else {
       this.db = new engine.Database()
       this.initSchema()
+      this.seedSampleDataIfEmpty()
       this.persist()
     }
+  }
+
+  private seedSampleDataIfEmpty(): void {
+    if (!this.db) return
+    const rows = this.query<{ cnt: number }>('SELECT count(*) as cnt FROM projects')
+    if (rows.length > 0 && rows[0].cnt > 0) return
+
+    const now = new Date().toISOString()
+    const homeDir = process.env.USERPROFILE || process.env.HOME || '.'
+    const sampleDir = path.join(homeDir, 'FrameFlowProjects', 'UTH_Video_Intro')
+
+    // Seed 5 sample projects matching the Vietnamese mockups
+    this.run(
+      `INSERT INTO projects (id, name, description, target_platform, target_duration, aspect_ratio, status, project_path, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'proj_uth_intro',
+        'UTH Video Giới thiệu',
+        'Giới thiệu con người, môi trường và tác động của UTH thông qua một video thương hiệu 45–60 giây cho web và mạng xã hội.',
+        'Thương hiệu',
+        60,
+        '16:9',
+        'REVIEWING',
+        sampleDir,
+        now,
+        now
+      ]
+    )
+
+    this.run(
+      `INSERT INTO projects (id, name, description, target_platform, target_duration, aspect_ratio, status, project_path, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'proj_riverside',
+        'Thương hiệu Riverside',
+        'Video thương hiệu Riverside phong cách sang trọng.',
+        'Thương hiệu',
+        90,
+        '16:9',
+        'PLANNING',
+        path.join(homeDir, 'FrameFlowProjects', 'Riverside'),
+        now,
+        now
+      ]
+    )
+
+    this.run(
+      `INSERT INTO projects (id, name, description, target_platform, target_duration, aspect_ratio, status, project_path, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'proj_launch_2025',
+        'Sản phẩm ra mắt 2025',
+        'Chiến dịch ra mắt sản phẩm 2025 định dạng dọc ngắn.',
+        'TikTok',
+        30,
+        '9:16',
+        'PLANNING',
+        path.join(homeDir, 'FrameFlowProjects', 'ProductLaunch2025'),
+        now,
+        now
+      ]
+    )
+
+    this.run(
+      `INSERT INTO projects (id, name, description, target_platform, target_duration, aspect_ratio, status, project_path, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'proj_customer_story',
+        'Câu chuyện khách hàng',
+        'Phỏng vấn trải nghiệm khách hàng và giải pháp.',
+        'YouTube',
+        120,
+        '16:9',
+        'PLANNING',
+        path.join(homeDir, 'FrameFlowProjects', 'CustomerStory'),
+        now,
+        now
+      ]
+    )
+
+    this.run(
+      `INSERT INTO projects (id, name, description, target_platform, target_duration, aspect_ratio, status, project_path, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'proj_internal_comm',
+        'Truyền thông nội bộ',
+        'Bản tin video nội bộ công ty quý 1.',
+        'Nội bộ',
+        45,
+        '16:9',
+        'PLANNING',
+        path.join(homeDir, 'FrameFlowProjects', 'InternalComm'),
+        now,
+        now
+      ]
+    )
+
+    this.persist()
   }
 
   private initSchema(): void {

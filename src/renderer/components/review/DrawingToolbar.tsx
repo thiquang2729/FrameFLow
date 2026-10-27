@@ -1,11 +1,12 @@
 import React from 'react'
 import {
+  Pen,
   MoveRight,
   Square,
   Circle,
   Type,
   Undo2,
-  Trash2
+  Redo2
 } from 'lucide-react'
 import { AnnotationType } from '@shared/types'
 
@@ -17,8 +18,9 @@ interface DrawingToolbarProps {
   strokeWidth: number
   setStrokeWidth: (width: number) => void
   onUndo: () => void
-  onClear: () => void
+  onRedo?: () => void
   canUndo: boolean
+  canRedo?: boolean
 }
 
 export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
@@ -29,92 +31,136 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
   strokeWidth,
   setStrokeWidth,
   onUndo,
-  onClear,
-  canUndo
+  onRedo,
+  canUndo,
+  canRedo = false
 }) => {
-  const tools: { id: AnnotationType; label: string; icon: any }[] = [
-    { id: 'ARROW', label: 'Mũi tên', icon: MoveRight },
-    { id: 'RECT', label: 'Hình chữ nhật', icon: Square },
-    { id: 'CIRCLE', label: 'Hình tròn', icon: Circle },
-    { id: 'TEXT', label: 'Văn bản', icon: Type }
+  const tools = [
+    { id: 'RECT' as AnnotationType, label: 'Bút', icon: Pen },
+    { id: 'ARROW' as AnnotationType, label: 'Mũi tên', icon: MoveRight },
+    { id: 'RECT' as AnnotationType, label: 'Hình chữ nhật', icon: Square },
+    { id: 'CIRCLE' as AnnotationType, label: 'Hình tròn', icon: Circle },
+    { id: 'TEXT' as AnnotationType, label: 'Văn bản', icon: Type }
   ]
 
   const colors = [
     '#ef4444', // Red
-    '#3b82f6', // Blue
+    '#2563eb', // Blue
     '#10b981', // Green
-    '#f59e0b', // Amber/Yellow
+    '#f59e0b', // Yellow
+    '#a855f7', // Purple
     '#ec4899', // Pink
-    '#ffffff'  // White
+    '#ffffff', // White
+    '#0f172a'  // Dark/Black
+  ]
+
+  const strokeSizes = [
+    { width: 2, label: 'Nhỏ', sizeClass: 'w-2 h-2' },
+    { width: 4, label: 'Vừa', sizeClass: 'w-3 h-3' },
+    { width: 6, label: 'Lớn', sizeClass: 'w-4 h-4' }
   ]
 
   return (
-    <div className="space-y-3 p-3 bg-[#0d1117] border border-[#21262d] rounded-xl text-xs select-none">
-      {/* Tool Selection */}
-      <div>
-        <p className="text-[11px] font-medium text-slate-400 mb-1.5">Công cụ vẽ</p>
-        <div className="grid grid-cols-4 gap-1">
-          {tools.map((t) => {
-            const Icon = t.icon
-            const isSelected = currentTool === t.id
-            return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setCurrentTool(t.id)}
-                title={t.label}
-                className={`p-2 rounded-lg flex flex-col items-center justify-center gap-1 transition ${
-                  isSelected
-                    ? 'bg-blue-600 text-white font-semibold'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                <span className="text-[9px] truncate max-w-full">{t.label}</span>
-              </button>
-            )
-          })}
-        </div>
+    <div className="space-y-3 pt-2 text-xs select-none">
+      <div className="flex items-center justify-between">
+        <span className="font-bold text-slate-900 text-xs">Công cụ vẽ</span>
       </div>
 
-      {/* Colors & Actions */}
-      <div className="flex items-center justify-between pt-2 border-t border-[#21262d]">
-        {/* Color Palette */}
-        <div className="flex items-center gap-1.5">
-          {colors.map((c) => (
+      {/* Tool Buttons Row */}
+      <div className="grid grid-cols-7 gap-1.5">
+        {tools.map((t, idx) => {
+          const Icon = t.icon
+          const isSelected = currentTool === t.id && (idx !== 0 || currentTool === 'RECT')
+          return (
             <button
-              key={c}
+              key={idx}
               type="button"
-              onClick={() => setCurrentColor(c)}
-              className={`w-5 h-5 rounded-full transition-all ${
-                currentColor === c
-                  ? 'ring-2 ring-white scale-110 shadow-sm'
-                  : 'hover:scale-105 opacity-80 hover:opacity-100'
+              onClick={() => setCurrentTool(t.id)}
+              className={`p-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all ${
+                isSelected
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/80'
               }`}
-              style={{ backgroundColor: c }}
-            />
-          ))}
+              title={t.label}
+            >
+              <Icon className="w-4 h-4" />
+              <span className="text-[10px] truncate max-w-full font-medium">{t.label}</span>
+            </button>
+          )
+        })}
+
+        {/* Undo Button */}
+        <button
+          type="button"
+          onClick={onUndo}
+          disabled={!canUndo}
+          className="p-2 rounded-xl flex flex-col items-center justify-center gap-1 bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/80 disabled:opacity-40 transition-all"
+          title="Hoàn tác"
+        >
+          <Undo2 className="w-4 h-4" />
+          <span className="text-[10px] font-medium">Hoàn tác</span>
+        </button>
+
+        {/* Redo Button */}
+        <button
+          type="button"
+          onClick={onRedo}
+          disabled={!canRedo}
+          className="p-2 rounded-xl flex flex-col items-center justify-center gap-1 bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/80 disabled:opacity-40 transition-all"
+          title="Làm lại"
+        >
+          <Redo2 className="w-4 h-4" />
+          <span className="text-[10px] font-medium">Làm lại</span>
+        </button>
+      </div>
+
+      {/* Colors & Sizes Row */}
+      <div className="flex items-center justify-between pt-1">
+        {/* Colors */}
+        <div className="space-y-1.5">
+          <span className="text-[11px] font-semibold text-slate-500">Màu sắc</span>
+          <div className="flex items-center gap-1.5">
+            {colors.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setCurrentColor(c)}
+                className={`w-5 h-5 rounded-full transition-all border ${
+                  c === '#ffffff' ? 'border-slate-300' : 'border-transparent'
+                } ${
+                  currentColor === c
+                    ? 'ring-2 ring-blue-500 ring-offset-1 scale-110 shadow-sm'
+                    : 'hover:scale-105'
+                }`}
+                style={{ backgroundColor: c }}
+              />
+            ))}
+          </div>
         </div>
 
-        {/* Undo & Clear */}
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={onUndo}
-            disabled={!canUndo}
-            title="Hoàn tác (Undo)"
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-30 transition"
-          >
-            <Undo2 className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={onClear}
-            title="Xóa tất cả hình vẽ"
-            className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded transition"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+        {/* Stroke Sizes */}
+        <div className="space-y-1.5 text-right">
+          <span className="text-[11px] font-semibold text-slate-500">Kích thước</span>
+          <div className="flex items-center gap-1.5 justify-end">
+            {strokeSizes.map((s) => (
+              <button
+                key={s.width}
+                type="button"
+                onClick={() => setStrokeWidth(s.width)}
+                className={`w-6 h-6 rounded-lg flex items-center justify-center border transition-all ${
+                  strokeWidth === s.width
+                    ? 'bg-blue-50 border-blue-500 text-blue-600 shadow-2xs'
+                    : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
+                }`}
+                title={s.label}
+              >
+                <span
+                  className={`${s.sizeClass} rounded-full`}
+                  style={{ backgroundColor: strokeWidth === s.width ? '#2563eb' : '#64748b' }}
+                />
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>
