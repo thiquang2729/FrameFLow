@@ -16,14 +16,10 @@ export const TopBar: React.FC = () => {
   const subLabel = tabLabels[activeTab]
 
   return (
-    <header className="h-14 px-8 border-b border-slate-200 flex items-center justify-between shrink-0 select-none bg-white">
-      {/* Breadcrumb Navigation / Project Title */}
+    <header className="h-14 px-8 border-b border-slate-200 flex items-center justify-between shrink-0 select-none bg-white relative">
+      {/* Breadcrumb Navigation */}
       <div className="flex items-center gap-2.5 text-xs min-w-0">
         <span className="text-slate-400 font-medium">Dự án</span>
-        <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />
-        <h1 className="font-bold text-slate-900 text-sm truncate max-w-xs" title={activeProject?.name}>
-          {activeProject ? activeProject.name : 'Chọn dự án'}
-        </h1>
         {subLabel && (
           <>
             <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />
@@ -31,6 +27,15 @@ export const TopBar: React.FC = () => {
           </>
         )}
       </div>
+
+      {/* Center Project Name */}
+      {activeProject && (
+        <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center max-w-[35%] truncate pointer-events-none">
+          <h1 className="font-bold text-slate-900 text-sm sm:text-base truncate tracking-tight" title={activeProject.name}>
+            {activeProject.name}
+          </h1>
+        </div>
+      )}
 
       {/* Right Actions / Status */}
       <div className="flex items-center gap-3 shrink-0">

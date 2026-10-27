@@ -43,7 +43,7 @@ function ProjectExport({ project }: { project: Project }): React.ReactElement {
   const source = versions.find((version) => version.id === sourceId)
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-[#f8fafc] text-slate-800 min-w-0">
-      <header><h1 className="text-2xl font-bold">Xuất gói chỉnh sửa</h1><p className="text-xs text-slate-500 mt-1">{project.name} · Tạo thư mục local để bạn chuyển cho AI agent/editor. Không tự gửi dữ liệu ra ngoài.</p></header>
+      <header><h1 className="text-2xl font-bold">Xuất gói chỉnh sửa</h1></header>
       {loading ? <p role="status">Đang tải phiên bản...</p> : error ? <p role="alert" className="text-red-600 text-xs">{error}</p> : !source ? <div className="p-8 border border-dashed rounded-xl text-center space-y-3 text-slate-500"><Folder className="mx-auto" /><p>Chưa có bản dựng để xuất feedback.</p><button className={buttonClass} onClick={() => setActiveTab('versions')}>Đến Phiên bản</button></div> : <>
         <label className="block max-w-md text-xs space-y-2"><span className="font-semibold">Phiên bản nguồn</span><select aria-label="Phiên bản nguồn xuất" className={inputClass} value={sourceId} disabled={busy} onChange={(event) => { setSourceId(event.target.value); selectVersion(event.target.value) }}>
           {versions.map((version) => <option key={version.id} value={version.id}>V{version.versionNumber} — {version.name}</option>)}
@@ -145,11 +145,10 @@ function VersionExport({ project, source, onBusy }: { project: Project; source: 
       <fieldset disabled={exporting} className="space-y-5 min-w-0">
         <section className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3">
           <label className="block text-xs space-y-2"><span className="font-semibold">Tên phiên bản đích</span><input aria-label="Tên phiên bản đích" className={inputClass} maxLength={120} value={target} onChange={(event) => setTarget(event.target.value)} /></label>
-          <p className="text-[11px] text-slate-400">Đây là nhãn cho lần chỉnh sửa tiếp theo, không tạo EditVersion hoặc video mới.</p>
         </section>
         <section className="bg-white p-4 rounded-2xl border border-slate-200 space-y-4">
           <h2 className="font-bold text-sm">Bình luận cần xuất</h2>
-          <p className="text-xs text-slate-500">Đã chọn {selected.size}/{comments.length}; đang hiển thị {visible.length}. Bình luận đã chọn nhưng bị ẩn bởi bộ lọc vẫn được xuất. Mặc định bỏ qua Đã sửa/Từ chối.</p>
+          <p className="text-xs text-slate-500">Đã chọn {selected.size}/{comments.length}; đang hiển thị {visible.length}.</p>
           <div className="flex flex-wrap gap-2">
             <select aria-label="Lọc trạng thái xuất" className="p-2 border rounded-xl text-xs" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="ALL">Tất cả trạng thái</option>{Object.entries(statuses).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
             <select aria-label="Lọc ưu tiên xuất" className="p-2 border rounded-xl text-xs" value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)}><option value="ALL">Tất cả ưu tiên</option>{Object.entries(priorities).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
@@ -170,7 +169,6 @@ function VersionExport({ project, source, onBusy }: { project: Project; source: 
       </fieldset>
       <aside className="bg-white p-4 rounded-2xl border border-slate-200 space-y-4 h-fit min-w-0">
         <h2 className="font-bold text-sm flex gap-2 items-center"><Package size={16} />Xem trước gói</h2>
-        <p className="text-[11px] text-slate-500">Chỉ gồm review.json, README.md, instructions.md, frames/ và annotated/. Không có dữ liệu AI/SRC/preferences giả. Dung lượng được đọc từ file thật.</p>
         {!valid && <p className="text-xs text-slate-500">Chọn ít nhất một bình luận và nhập tên đích khác tên nguồn để xem trước.</p>}
         {previewing && <p role="status" className="text-xs text-blue-600">Đang kiểm tra file và tạo preview...</p>}
         {previewError && <p role="alert" className="text-xs text-red-700 break-words">{previewError}</p>}
@@ -182,7 +180,6 @@ function VersionExport({ project, source, onBusy }: { project: Project; source: 
         </>}
         {error && <p role="alert" className="text-xs text-red-700 break-words">{error}</p>}
         <button className={`${buttonClass} bg-blue-600 text-white hover:bg-blue-700 w-full`} disabled={exporting || previewing || !currentPreview || !valid} onClick={() => { void exportPackage() }}>{exporting ? 'Đang tạo gói...' : 'Tạo gói chỉnh sửa'}</button>
-        <p className="text-[11px] text-slate-400">Xuất vào exports/ trong dự án. Mỗi lần tạo thư mục riêng và kiểm tra lại file trước khi lưu.</p>
         {success && <div role="status" className="bg-emerald-50 p-3 rounded-xl space-y-2 text-xs"><p className="font-semibold text-emerald-700">Đã tạo gói chỉnh sửa.</p><p aria-label="Đường dẫn gói đã xuất" className="break-all">{success.packagePath}</p><button className={buttonClass} onClick={() => { void openFolder() }}>Mở thư mục gói</button></div>}
       </aside>
     </div>

@@ -87,7 +87,12 @@ function ProjectVersions({ project }: { project: Project }): React.ReactElement 
 
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-[#f8fafc] text-slate-800 min-w-0">
-      <header className="flex justify-between items-start gap-3"><div><h1 className="text-2xl font-bold">Phiên bản dựng</h1><p className="text-xs text-slate-500 mt-1">{project.name} · Mỗi feedback luôn thuộc đúng phiên bản video.</p></div><button className={`${buttonClass} flex gap-2 items-center`} disabled={loading} onClick={startImport}><Plus size={14} />Thêm bản dựng mới</button></header>
+      <header className="flex justify-between items-center gap-3">
+        <h1 className="text-2xl font-bold">Phiên bản dựng</h1>
+        <button className={`${buttonClass} flex gap-2 items-center`} disabled={loading} onClick={startImport}>
+          <Plus size={14} />Thêm bản dựng mới
+        </button>
+      </header>
       {error && !showModal && <div role="alert" className="text-xs text-red-700 space-x-3"><span>{error}</span><button className={buttonClass} onClick={() => { setError(''); setReload((value) => value + 1) }}>Tải lại</button></div>}
       {warning && <p role="status" className="text-xs text-amber-700">{warning}</p>}
       {loading ? <p role="status" className="text-xs text-slate-500">Đang tải phiên bản...</p> : !versions.length ? <div className="p-10 border border-dashed rounded-2xl text-center text-slate-500 space-y-3"><Film className="mx-auto" /><p>Chưa có bản dựng. Nhập video đầu tiên để bắt đầu review.</p></div> : <div className="space-y-3">

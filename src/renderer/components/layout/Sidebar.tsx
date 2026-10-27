@@ -122,10 +122,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenCreateProject }) => {
           <span>Tạo dự án mới</span>
         </button>
       </div>
-
-      <div className="p-3.5 border-t border-slate-200 bg-white text-[11px] text-slate-500">
-        Không gian cá nhân · Lưu trên máy
-      </div>
     </aside>
   )
 }

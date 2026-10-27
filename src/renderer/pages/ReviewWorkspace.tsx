@@ -448,7 +448,7 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
     <>
       {error && <p role="alert" className="p-3 text-xs text-red-700 bg-red-50">{error}</p>}
       <div className="flex-1 flex min-h-0 overflow-x-auto">
-        <aside className="w-64 shrink-0 border-r border-slate-200 bg-white flex flex-col">
+        <aside className="w-80 shrink-0 border-r border-slate-200 bg-white flex flex-col">
           <div className="p-4 border-b space-y-3"><h2 className="text-sm font-bold">Bình luận ({comments.length})</h2>
             <select aria-label="Lọc trạng thái bình luận" className={inputClass} value={filter} onChange={(event) => setFilter(event.target.value)}>
               <option value="ALL">Tất cả trạng thái</option>{Object.entries(statuses).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -497,12 +497,6 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
             <div className="flex flex-wrap justify-between items-center gap-2 text-xs">
               <div className="flex items-center gap-2">
                 <span className="font-mono">Frame ~{frameIndex(draftTime ?? time)} · {formatTime(draftTime ?? time)} · {version.name}</span>
-                {videoDimensions.width && videoDimensions.height ? (
-                  <span className="font-mono text-[11px] text-slate-400">({videoDimensions.width}×{videoDimensions.height})</span>
-                ) : null}
-                {isVertical && (
-                  <span className="px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 font-semibold text-[10px]">9:16 Dọc</span>
-                )}
               </div>
               <button aria-label="Bật/tắt vẽ trên frame" aria-pressed={drawingMode} disabled={!ready || loading || capturing || saving || seeking} className={`${buttonClass} flex items-center gap-1 ${drawingMode ? 'bg-blue-50 text-blue-700' : ''}`} onClick={toggleDrawing}><Pen size={14} />{drawingMode ? 'Tắt vẽ (D)' : 'Vẽ trên frame (D)'}</button>
             </div>
@@ -549,12 +543,6 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
               </div> : !playing && !seeking && savedFrame && activeComment ? <div className="absolute inset-0 bg-black pointer-events-none">
                 <AnnotationCanvas key={activeComment.id} fit="player" imageSrc={savedFrame} annotations={activeComment.annotations || []} currentTool={tool} currentColor={color} strokeWidth={strokeWidth} readOnly />
               </div> : null}
-              {isVertical && (
-                <div className="absolute top-2.5 right-2.5 pointer-events-none px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-white/90 text-[10px] font-mono border border-white/10 flex items-center gap-1 shadow-sm">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  9:16 Dọc
-                </div>
-              )}
             </div>
             {mediaError && <p role="alert" className="absolute inset-x-8 p-4 rounded-xl bg-white text-red-700 text-xs shadow-lg">{mediaError}</p>}
           </div>
@@ -585,7 +573,7 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
             <p className="text-[10px] text-slate-400">Space: phát/dừng · C: bình luận · D: bật/tắt vẽ · ←/→: frame · Shift+←/→: 5 giây · Frame ước tính ({version.fps || 30} fps)</p>
           </div>
         </main>
-        <aside className="w-96 shrink-0 overflow-y-auto border-l border-slate-200 bg-white p-4 space-y-4">
+        <aside className="w-80 shrink-0 overflow-y-auto border-l border-slate-200 bg-white p-4 space-y-4">
           <h2 className="font-bold text-sm">Ghi chú duyệt</h2>
           {draftTime !== null ? <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void saveComment() }}>
             <p className="font-mono text-xs">{formatTime(draftTime)} · Frame ~{Math.round(draftTime * (version.fps || 30))}</p>

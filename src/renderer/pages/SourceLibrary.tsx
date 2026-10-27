@@ -121,7 +121,6 @@ function ProjectSources({ project }: { project: Project }): React.ReactElement {
           <div><h1 className="text-2xl font-bold">Thư viện SRC</h1><p className="text-xs text-slate-500 mt-1">{project.name} · {sources.length} tệp · {sizeLabel(sources.reduce((sum, asset) => sum + (asset.fileSize || 0), 0))}</p></div>
           <div className="flex gap-2"><button className={buttonClass} disabled={loading || importing} onClick={() => { void importSources(true) }}><Folder size={14} className="inline mr-1" />Nhập thư mục</button><button className={`${buttonClass} bg-blue-600 text-white hover:bg-blue-700`} disabled={loading || importing} onClick={() => { void importSources(false) }}><Upload size={14} className="inline mr-1" />Nhập tư liệu</button></div>
         </header>
-        <p className="text-xs text-slate-500">Chỉ lưu đường dẫn đến tệp gốc, không sao chép footage vào dự án. Di chuyển hoặc xóa tệp gốc sẽ làm preview không khả dụng.</p>
         {error && <p role="alert" className="text-xs text-red-700 bg-red-50 rounded-xl p-3">{error}</p>}
         {importing && <p role="status" className="text-xs text-blue-700">Đang nhập: {progress || 'Chờ chọn tệp...'}</p>}
         {report.length > 0 && <div role="status" className="text-xs bg-blue-50 border border-blue-100 rounded-xl p-3 max-h-40 overflow-y-auto space-y-1">{report.map((message, index) => <p key={index}>{message}</p>)}</div>}
