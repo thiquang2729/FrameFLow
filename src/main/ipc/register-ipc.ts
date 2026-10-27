@@ -7,7 +7,8 @@ import {
   CreateRevisionPackageDTO,
   CreateVersionDTO,
   ImportSourceDTO,
-  UpdateCommentStatusDTO
+  UpdateCommentStatusDTO,
+  UpdateCommentDTO
 } from '@shared/types'
 import { ProjectService } from '../services/project.service'
 import { VersionService } from '../services/version.service'
@@ -93,6 +94,8 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.COMMENT_CREATE, async (_, dto: CreateCommentDTO) => {
     return reviewService.createComment(dto)
   })
+
+  ipcMain.handle(IPC_CHANNELS.COMMENT_UPDATE, async (_, dto: UpdateCommentDTO) => reviewService.updateComment(dto))
 
   ipcMain.handle(
     IPC_CHANNELS.COMMENT_UPDATE_STATUS,

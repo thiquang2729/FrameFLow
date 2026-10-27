@@ -16,6 +16,7 @@ export const IPC_CHANNELS = {
   // Review & Comments
   COMMENT_LIST: 'comment:list',
   COMMENT_CREATE: 'comment:create',
+  COMMENT_UPDATE: 'comment:update',
   COMMENT_UPDATE_STATUS: 'comment:update-status',
   COMMENT_DELETE: 'comment:delete',
 

@@ -11,18 +11,29 @@ interface AnnotationCanvasProps {
   strokeWidth: number
   textContent?: string
   readOnly?: boolean
+  fit?: 'preview' | 'player'
 }
 
 export const AnnotationCanvas = React.forwardRef<
   { getAnnotatedBase64: () => string | null }, AnnotationCanvasProps
->(({ imageSrc, annotations, onAnnotationsChange, currentTool, currentColor, strokeWidth, textContent = '', readOnly = false }, ref) => {
+>(({ imageSrc, annotations, onAnnotationsChange, currentTool, currentColor, strokeWidth, textContent = '', readOnly = false, fit = 'preview' }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
   const startRef = useRef<Point | null>(null)
+  const pointsRef = useRef<number[]>([])
   const [preview, setPreview] = useState<Annotation | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState('')
   const [size, setSize] = useState({ width: 960, height: 540 })
+  const [viewport, setViewport] = useState({ width: 0, height: 0 })
+
+  useEffect(() => {
+    if (fit !== 'player' || !containerRef.current) return
+    const observer = new ResizeObserver(([entry]) => setViewport({ width: entry.contentRect.width, height: entry.contentRect.height }))
+    observer.observe(containerRef.current)
+    return () => observer.disconnect()
+  }, [fit])
 
   useEffect(() => {
     let cancelled = false
@@ -30,6 +41,7 @@ export const AnnotationCanvas = React.forwardRef<
     setError('')
     setPreview(null)
     startRef.current = null
+    pointsRef.current = []
     imageRef.current = null
     if (!imageSrc) return
     const image = new Image()
@@ -73,19 +85,23 @@ export const AnnotationCanvas = React.forwardRef<
     id: crypto.randomUUID(), reviewCommentId: '', type: currentTool, createdAt: new Date().toISOString(),
     data: {
       type: currentTool, color: currentColor, strokeWidth,
-      ...(currentTool === 'ARROW' ? { points: [start.x, start.y, end.x, end.y] }
+      ...(currentTool === 'PEN' || currentTool === 'HIGHLIGHT' ? { points: [...pointsRef.current] }
+        : currentTool === 'ARROW' ? { points: [start.x, start.y, end.x, end.y] }
         : { x: Math.min(start.x, end.x), y: Math.min(start.y, end.y), width: Math.abs(end.x - start.x), height: Math.abs(end.y - start.y) })
     }
   })
 
   return (
-    <div className="space-y-2">
+    <div ref={containerRef} className={fit === 'player' ? 'w-full h-full min-h-0 flex items-center justify-center relative' : 'space-y-2'}>
       {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
       {!loaded && !error && <p role="status" className="text-xs text-slate-400">Đang tải frame...</p>}
       <canvas ref={canvasRef} width={size.width} height={size.height} aria-label={readOnly ? 'Frame đã lưu cùng annotation' : 'Vẽ annotation lên frame'}
-        className={`block mx-auto max-w-full max-h-[50vh] w-auto h-auto bg-black rounded-lg border border-slate-200 touch-none ${readOnly ? '' : 'cursor-crosshair'}`}
+        tabIndex={readOnly ? -1 : 0}
+        style={fit === 'player' ? { width: size.width * Math.min(viewport.width / size.width, viewport.height / size.height), height: size.height * Math.min(viewport.width / size.width, viewport.height / size.height) } : undefined}
+        className={`block ${fit === 'player' ? '' : 'mx-auto max-w-full max-h-[50vh] w-auto h-auto'} bg-black rounded-lg border border-slate-200 touch-none ${readOnly ? '' : 'cursor-crosshair'}`}
         onPointerDown={(event) => {
           if (readOnly || !loaded || event.button !== 0) return
+          event.currentTarget.focus()
           const start = point(event)
           if (currentTool === 'TEXT') {
             if (!textContent.trim()) return
@@ -93,10 +109,16 @@ export const AnnotationCanvas = React.forwardRef<
             return
           }
           startRef.current = start
+          pointsRef.current = [start.x, start.y, start.x, start.y]
           event.currentTarget.setPointerCapture(event.pointerId)
           setPreview(shape(start, start))
         }}
-        onPointerMove={(event) => { if (startRef.current && !readOnly) setPreview(shape(startRef.current, point(event))) }}
+        onPointerMove={(event) => {
+          if (!startRef.current || readOnly) return
+          const end = point(event)
+          if ((currentTool === 'PEN' || currentTool === 'HIGHLIGHT') && pointsRef.current.length < 4000) pointsRef.current.push(end.x, end.y)
+          setPreview(shape(startRef.current, end))
+        }}
         onPointerUp={(event) => {
           const start = startRef.current
           startRef.current = null
@@ -104,7 +126,8 @@ export const AnnotationCanvas = React.forwardRef<
           if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
           if (!start || readOnly) return
           const end = point(event)
-          if (Math.hypot(end.x - start.x, end.y - start.y) < 0.005) return
+          if (currentTool === 'PEN' || currentTool === 'HIGHLIGHT') pointsRef.current.push(end.x, end.y)
+          else if (Math.hypot(end.x - start.x, end.y - start.y) < 0.005) return
           onAnnotationsChange?.([...annotations, shape(start, end)])
         }}
         onPointerCancel={() => { startRef.current = null; setPreview(null) }}

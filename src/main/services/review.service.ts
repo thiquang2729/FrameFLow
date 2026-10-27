@@ -6,6 +6,7 @@ import {
   CreateCommentDTO,
   ReviewAttachment,
   ReviewComment,
+  UpdateCommentDTO,
   UpdateCommentStatusDTO
 } from '@shared/types'
 import { ProjectService } from './project.service'
@@ -243,6 +244,43 @@ export class ReviewService {
     }
   }
 
+  public async updateComment(dto: UpdateCommentDTO): Promise<ReviewComment> {
+    const project = await this.projectService.getProject(dto.projectId)
+    if (!project) throw new Error('Project not found')
+    const db = await this.projectService.getDb(dto.projectId)
+    if (!db.get('SELECT id FROM review_comments WHERE id = ? AND project_id = ? AND edit_version_id = ?', [dto.commentId, dto.projectId, dto.editVersionId])) throw new Error('Comment does not belong to this version')
+    if (typeof dto.content !== 'string' || !dto.content.trim()) throw new Error('Comment content is required')
+    if (!['SUBTITLE', 'PACING', 'AUDIO', 'COLOR', 'CUT', 'EFFECT', 'GRAPHICS', 'GENERAL'].includes(dto.category) || !['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(dto.priority)) throw new Error('Invalid comment properties')
+    if (!Array.isArray(dto.annotations) || dto.annotations.length > 500) throw new Error('Invalid annotation count')
+    for (const annotation of dto.annotations) validateAnnotation(annotation)
+    if (dto.annotations.length && (!dto.annotatedFrameBase64 || !db.get("SELECT id FROM review_attachments WHERE review_comment_id = ? AND type = 'FRAME'", [dto.commentId]))) throw new Error('Annotations require an original frame and rendered PNG')
+    const png = dto.annotations.length ? decodeImage(dto.annotatedFrameBase64!, 'png') : null
+    const now = new Date().toISOString()
+    const relative = path.join('annotations', `${ulid()}.png`)
+    const absolute = path.join(project.projectPath, relative)
+    let createdFile = false
+    try {
+      db.transaction(() => {
+        if (png) {
+          fs.mkdirSync(path.dirname(absolute), { recursive: true })
+          const fd = fs.openSync(absolute, 'wx')
+          createdFile = true
+          try { fs.writeFileSync(fd, png) } finally { fs.closeSync(fd) }
+        }
+        db.run('UPDATE review_comments SET content = ?, category = ?, priority = ? WHERE id = ? AND project_id = ? AND edit_version_id = ?', [dto.content.trim(), dto.category, dto.priority, dto.commentId, dto.projectId, dto.editVersionId])
+        db.run('DELETE FROM annotations WHERE review_comment_id = ?', [dto.commentId])
+        db.run("DELETE FROM review_attachments WHERE review_comment_id = ? AND type = 'ANNOTATED_FRAME'", [dto.commentId])
+        for (const annotation of dto.annotations) db.run('INSERT INTO annotations (id, review_comment_id, type, data_json, created_at) VALUES (?, ?, ?, ?, ?)', [ulid(), dto.commentId, annotation.type, JSON.stringify(annotation.data), now])
+        if (png) db.run('INSERT INTO review_attachments (id, review_comment_id, type, file_path, created_at) VALUES (?, ?, ?, ?, ?)', [ulid(), dto.commentId, 'ANNOTATED_FRAME', relative, now])
+      })
+    } catch (error) {
+      if (createdFile) { try { fs.unlinkSync(absolute) } catch { /* Preserve the save error. */ } }
+      throw error
+    }
+    // Old PNGs are retained rather than overwriting an image already used by an export.
+    return (await this.getComments(dto.projectId, dto.editVersionId)).find((comment) => comment.id === dto.commentId)!
+  }
+
   public async updateStatus(dto: UpdateCommentStatusDTO & { projectId: string }): Promise<boolean> {
     if (!['OPEN', 'IN_PROGRESS', 'FIXED', 'PARTIAL', 'REJECTED'].includes(dto.status)) {
       throw new Error('Invalid comment status')
@@ -285,13 +323,13 @@ function decodeImage(dataUrl: string, format: 'jpeg' | 'png'): Buffer {
 function validateAnnotation(annotation: Annotation): void {
   const data = annotation?.data
   const normalized = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1
-  if (!data || !['ARROW', 'RECT', 'CIRCLE', 'TEXT'].includes(annotation.type) || data.type !== annotation.type ||
+  if (!data || !['ARROW', 'RECT', 'CIRCLE', 'TEXT', 'PEN', 'HIGHLIGHT'].includes(annotation.type) || data.type !== annotation.type ||
     typeof data.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(data.color) ||
     !Number.isFinite(data.strokeWidth) || data.strokeWidth < 1 || data.strokeWidth > 50) {
     throw new Error('Invalid annotation style')
   }
-  if (annotation.type === 'ARROW') {
-    if (!Array.isArray(data.points) || data.points.length !== 4 || !data.points.every(normalized)) throw new Error('Invalid arrow coordinates')
+  if (annotation.type === 'ARROW' || annotation.type === 'PEN' || annotation.type === 'HIGHLIGHT') {
+    if (!Array.isArray(data.points) || data.points.length < 4 || data.points.length > 4004 || data.points.length % 2 !== 0 || (annotation.type === 'ARROW' && data.points.length !== 4) || !data.points.every(normalized)) throw new Error('Invalid drawing coordinates')
   } else {
     if (!normalized(data.x) || !normalized(data.y)) throw new Error('Invalid annotation coordinates')
     if (annotation.type === 'TEXT') {

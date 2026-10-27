@@ -36,6 +36,32 @@ test('renders normalized geometry without distorting landscape, portrait or 4K f
   }
 })
 
+test('pen draws a polyline and highlight uses translucent wide strokes without leaking opacity', () => {
+  const strokes = []
+  const stack = []
+  const context = {
+    globalAlpha: 1, lineWidth: 1,
+    save() { stack.push({ globalAlpha: this.globalAlpha, lineWidth: this.lineWidth }) },
+    restore() { Object.assign(this, stack.pop()) },
+    beginPath() {}, moveTo() {}, lineTo() {},
+    stroke() { strokes.push({ alpha: this.globalAlpha, width: this.lineWidth }) }
+  }
+  drawAnnotations(context, [shape('PEN', { points: [0.1, 0.2, 0.3, 0.4] }), shape('HIGHLIGHT', { points: [0.1, 0.2, 0.3, 0.4] })], 1920, 1080)
+  assert.deepEqual(strokes, [{ alpha: 1, width: 8 }, { alpha: 0.3, width: 40 }])
+  assert.equal(context.globalAlpha, 1)
+})
+
+test('navigation guard blocks leaving an unsaved frame and cleans up only its own registration', () => {
+  const { registerNavigationGuard, confirmNavigation } = load('src/renderer/lib/navigation-guard.ts')
+  const first = registerNavigationGuard(() => false)
+  assert.equal(confirmNavigation(), false)
+  const second = registerNavigationGuard(() => true)
+  first()
+  assert.equal(confirmNavigation(), true)
+  second()
+  assert.equal(confirmNavigation(), true)
+})
+
 test('capture pauses video, preserves source resolution and exports JPEG', async () => {
   const calls = []
   const canvas = { width: 0, height: 0, getContext: () => ({ drawImage: (...args) => calls.push(args) }), toDataURL: (type) => `data:${type};base64,test` }

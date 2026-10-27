@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { Project, ProjectStats, CreateProjectDTO } from '@shared/types'
+import { confirmNavigation } from '../lib/navigation-guard'
 
 interface ProjectState {
   projects: Project[]
@@ -18,7 +19,7 @@ interface ProjectState {
   createProject: (dto: CreateProjectDTO) => Promise<Project>
   deleteProject: (projectId: string) => Promise<void>
   refreshStats: () => Promise<void>
-  selectVersion: (versionId: string) => void
+  selectVersion: (versionId: string) => boolean
   openReview: (versionId: string, commentId?: string) => void
 }
 
@@ -34,9 +35,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   activeVersionId: null,
   reviewCommentId: null,
 
-  setActiveTab: (tab) => set({ activeTab: tab }),
-  selectVersion: (versionId) => set({ activeVersionId: versionId, reviewCommentId: null }),
-  openReview: (versionId, commentId) => set({ activeTab: 'review', activeVersionId: versionId, reviewCommentId: commentId || null }),
+  setActiveTab: (tab) => { if (tab === get().activeTab || confirmNavigation()) set({ activeTab: tab }) },
+  selectVersion: (versionId) => {
+    if (versionId !== get().activeVersionId && !confirmNavigation()) return false
+    set({ activeVersionId: versionId, reviewCommentId: null })
+    return true
+  },
+  openReview: (versionId, commentId) => { if (confirmNavigation()) set({ activeTab: 'review', activeVersionId: versionId, reviewCommentId: commentId || null }) },
 
   fetchProjects: async () => {
     try {
@@ -55,6 +60,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   selectProject: async (projectId: string) => {
+    if (projectId !== get().activeProject?.id && !confirmNavigation()) return
     const generation = ++selectionGeneration
     try {
       set({ isLoading: true, error: null })
@@ -70,6 +76,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   createProject: async (dto: CreateProjectDTO) => {
+    if (!confirmNavigation()) throw new Error('Hãy lưu hoặc hủy ghi chú frame trước khi tạo dự án.')
     const generation = ++selectionGeneration
     try {
       set({ isLoading: true, error: null })
@@ -86,6 +93,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   deleteProject: async (projectId: string) => {
+    if (projectId === get().activeProject?.id && !confirmNavigation()) return
     try {
       await window.api.deleteProject(projectId)
       const remaining = get().projects.filter((p) => p.id !== projectId)

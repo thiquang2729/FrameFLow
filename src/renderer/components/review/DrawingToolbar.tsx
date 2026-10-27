@@ -1,5 +1,7 @@
 import React from 'react'
 import {
+  Pen,
+  Highlighter,
   MoveRight,
   Square,
   Circle,
@@ -35,10 +37,12 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
   canRedo = false
 }) => {
   const tools = [
+    { id: 'PEN' as AnnotationType, label: 'Bút tự do', icon: Pen },
     { id: 'ARROW' as AnnotationType, label: 'Mũi tên', icon: MoveRight },
     { id: 'RECT' as AnnotationType, label: 'Hình chữ nhật', icon: Square },
     { id: 'CIRCLE' as AnnotationType, label: 'Hình tròn', icon: Circle },
-    { id: 'TEXT' as AnnotationType, label: 'Văn bản', icon: Type }
+    { id: 'TEXT' as AnnotationType, label: 'Văn bản', icon: Type },
+    { id: 'HIGHLIGHT' as AnnotationType, label: 'Highlight', icon: Highlighter }
   ]
 
   const colors = [
@@ -65,7 +69,7 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
       </div>
 
       {/* Tool Buttons Row */}
-      <div className="grid grid-cols-6 gap-1.5">
+      <div className="grid grid-cols-4 lg:grid-cols-8 gap-1.5">
         {tools.map((t, idx) => {
           const Icon = t.icon
           const isSelected = currentTool === t.id
@@ -80,6 +84,8 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
                   : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/80'
               }`}
               title={t.label}
+              aria-label={t.label}
+              aria-pressed={isSelected}
             >
               <Icon className="w-4 h-4" />
               <span className="text-[10px] truncate max-w-full font-medium">{t.label}</span>

@@ -6,7 +6,8 @@ import {
   CreateRevisionPackageDTO,
   CreateVersionDTO,
   ImportSourceDTO,
-  UpdateCommentStatusDTO
+  UpdateCommentStatusDTO,
+  UpdateCommentDTO
 } from '../shared/types'
 
 const api = {
@@ -30,6 +31,7 @@ const api = {
   listComments: (projectId: string, versionId: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.COMMENT_LIST, { projectId, versionId }),
   createComment: (dto: CreateCommentDTO) => ipcRenderer.invoke(IPC_CHANNELS.COMMENT_CREATE, dto),
+  updateComment: (dto: UpdateCommentDTO) => ipcRenderer.invoke(IPC_CHANNELS.COMMENT_UPDATE, dto),
   updateCommentStatus: (dto: UpdateCommentStatusDTO & { projectId: string }) =>
     ipcRenderer.invoke(IPC_CHANNELS.COMMENT_UPDATE_STATUS, dto),
   deleteComment: (projectId: string, commentId: string) =>

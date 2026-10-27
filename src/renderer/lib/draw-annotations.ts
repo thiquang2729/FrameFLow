@@ -11,7 +11,17 @@ export function drawAnnotations(context: CanvasRenderingContext2D, annotations: 
     context.fillStyle = data.color
     context.lineWidth = data.strokeWidth * scale
     context.lineCap = 'round'
-    if (annotation.type === 'ARROW' && data.points?.length === 4) {
+    if ((annotation.type === 'PEN' || annotation.type === 'HIGHLIGHT') && data.points && data.points.length >= 4) {
+      context.lineJoin = 'round'
+      if (annotation.type === 'HIGHLIGHT') {
+        context.globalAlpha = 0.3
+        context.lineWidth = data.strokeWidth * 5 * scale
+      }
+      context.beginPath()
+      context.moveTo(data.points[0] * width, data.points[1] * height)
+      for (let index = 2; index < data.points.length; index += 2) context.lineTo(data.points[index] * width, data.points[index + 1] * height)
+      context.stroke()
+    } else if (annotation.type === 'ARROW' && data.points?.length === 4) {
       const [x1, y1, x2, y2] = data.points
       const sx = x1 * width, sy = y1 * height, ex = x2 * width, ey = y2 * height
       const angle = Math.atan2(ey - sy, ex - sx)
