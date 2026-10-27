@@ -1,5 +1,6 @@
 {
   "name": "frameflow",
+  "type": "module",
   "version": "0.1.0",
   "description": "AI-assisted post-production video review workspace",
   "main": "./out/main/index.js",

@@ -1,14 +1,45 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
+import { Sidebar } from './components/layout/Sidebar'
+import { TopBar } from './components/layout/TopBar'
+import { CreateProjectModal } from './components/project/CreateProjectModal'
+import { Dashboard } from './pages/Dashboard'
+import { SourceLibrary } from './pages/SourceLibrary'
+import { VersionList } from './pages/VersionList'
+import { ReviewWorkspace } from './pages/ReviewWorkspace'
+import { ExportPackage } from './pages/ExportPackage'
+import { useProjectStore } from './stores/project.store'
 
 export default function App(): React.JSX.Element {
+  const { activeTab, fetchProjects } = useProjectStore()
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+
+  useEffect(() => {
+    fetchProjects()
+  }, [])
+
   return (
-    <div className="flex h-screen w-screen items-center justify-center bg-background text-white">
-      <div className="text-center space-y-4">
-        <h1 className="text-3xl font-bold tracking-tight text-blue-500">FrameFlow</h1>
-        <p className="text-slate-400 text-sm">
-          AI-assisted post-production video review workspace
-        </p>
+    <div className="flex h-screen w-screen bg-[#0d1117] text-slate-100 overflow-hidden font-sans">
+      {/* 1. Left Sidebar Navigation */}
+      <Sidebar onOpenCreateProject={() => setIsCreateModalOpen(true)} />
+
+      {/* 2. Main Workspace Layout */}
+      <div className="flex-1 flex flex-col min-w-0 h-full">
+        <TopBar />
+
+        <main className="flex-1 flex overflow-hidden">
+          {activeTab === 'overview' && <Dashboard />}
+          {activeTab === 'src' && <SourceLibrary />}
+          {activeTab === 'versions' && <VersionList />}
+          {activeTab === 'review' && <ReviewWorkspace />}
+          {activeTab === 'export' && <ExportPackage />}
+        </main>
       </div>
+
+      {/* Modal Create Project */}
+      <CreateProjectModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+      />
     </div>
   )
 }
