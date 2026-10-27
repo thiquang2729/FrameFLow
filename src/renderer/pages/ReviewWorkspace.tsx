@@ -5,6 +5,7 @@ import { Annotation, AnnotationType, CommentCategory, CommentPriority, CommentSt
 import { useProjectStore } from '../stores/project.store'
 import { AnnotationCanvas } from '../components/review/AnnotationCanvas'
 import { DrawingToolbar } from '../components/review/DrawingToolbar'
+import { VideoPlayerControls } from '../components/review/VideoPlayerControls'
 import { captureFrame } from '../lib/capture-frame'
 import { localFileUrl as fileUrl } from '../lib/source-media'
 import { registerNavigationGuard } from '../lib/navigation-guard'
@@ -175,6 +176,7 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
   const [drawingMode, setDrawingMode] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [seeking, setSeeking] = useState(false)
+  const [playbackRate, setPlaybackRate] = useState(1)
   const baseline = useRef('')
   const annotations = history[historyIndex]
   const changeAnnotations = (next: Annotation[]) => {
@@ -407,20 +409,20 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
     const handleKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing) return
       const target = event.target as HTMLElement | null
-      const editing = target?.closest('input, textarea, select, button, [contenteditable="true"]')
-      const typing = target?.closest('input, textarea, select, [contenteditable="true"]')
+      const isTextInput = target?.closest('input:not([type="range"]):not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]')
+      const isSelect = target?.closest('select')
       if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && draftTime !== null) {
         event.preventDefault()
         void saveComment()
         return
       }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z' && draftTime !== null && !editing && !saving) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z' && draftTime !== null && !isTextInput && !saving) {
         event.preventDefault()
         setHistoryIndex((index) => event.shiftKey ? Math.min(history.length - 1, index + 1) : Math.max(0, index - 1))
         return
       }
-      if (!typing && !event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === 'd') { event.preventDefault(); toggleDrawing(); return }
-      if (editing || event.ctrlKey || event.metaKey || event.altKey) return
+      if (!isTextInput && !event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === 'd') { event.preventDefault(); toggleDrawing(); return }
+      if (isTextInput || isSelect || event.ctrlKey || event.metaKey || event.altKey) return
       if (event.key === 'Escape') { leaveDraft(); return }
       if (draftTime !== null) {
         const choice: Record<string, CommentPriority> = { '1': 'LOW', '2': 'MEDIUM', '3': 'HIGH' }
@@ -585,32 +587,33 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
             </div>
             {mediaError && <p role="alert" className="absolute inset-x-8 p-4 rounded-xl bg-white text-red-700 text-xs shadow-lg">{mediaError}</p>}
           </div>
-          <div className="bg-white border-t p-3 space-y-2.5">
-            <div className="flex flex-wrap justify-between gap-3 items-center text-xs">
-              <div className="flex items-center gap-3">
-                <span className="font-mono">{formatTime(time)} / {formatTime(duration)}</span>
-                <div className="flex gap-1.5">
-                  <button aria-label="Frame trước" className={buttonClass} disabled={!ready || saving || capturing} onClick={() => seek(time - 1 / (version.fps || 30))}><SkipBack size={14} /></button>
-                  <button aria-label={playing ? 'Tạm dừng' : 'Phát'} className={buttonClass} disabled={!ready || saving || capturing} onClick={togglePlay}>{playing ? <Pause size={14} /> : <Play size={14} />}</button>
-                  <button aria-label="Frame tiếp" className={buttonClass} disabled={!ready || saving || capturing} onClick={() => seek(time + 1 / (version.fps || 30))}><SkipForward size={14} /></button>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <label className="flex items-center gap-1.5 text-xs text-slate-600">
-                  <Volume2 size={14} className="text-slate-400 shrink-0" />
-                  <input aria-label="Âm lượng" type="range" min="0" max="1" step="0.05" value={volume} onChange={(event) => { const value = Number(event.target.value); setVolume(value); if (videoRef.current) videoRef.current.volume = value }} className="w-20" />
-                </label>
-                <button aria-label="Toàn màn hình" className={buttonClass} onClick={() => { void videoRef.current?.requestFullscreen().catch(() => setError('Không thể bật toàn màn hình.')) }}><Maximize size={14} /></button>
-              </div>
-            </div>
-            <div className="space-y-1">
-              <input aria-label="Vị trí phát video" type="range" min="0" max={duration || 1} step="0.001" value={Math.min(time, duration)} disabled={!ready || saving || capturing} onChange={(event) => seek(Number(event.target.value))} className="w-full" />
-              <div className="relative h-4 mx-2 bg-slate-100 rounded" aria-label="Marker bình luận">
-                {duration > 0 && comments.map((comment) => <button key={comment.id} aria-label={`${formatTime(comment.timestamp)}: ${comment.content}`} title={`${formatTime(comment.timestamp)}: ${comment.content}`} disabled={capturing || saving} onClick={() => pickComment(comment)} style={{ left: `${Math.min(100, comment.timestamp / duration * 100)}%` }} className={`absolute top-0.5 -translate-x-1/2 w-3.5 h-3.5 rounded-full border border-white shadow-xs ${comment.status === 'FIXED' ? 'bg-emerald-500' : 'bg-blue-500'}`} />)}
-              </div>
-            </div>
-            <p className="text-[10px] text-slate-400">Space: phát/dừng · C: bình luận · D: bật/tắt vẽ · ←/→: frame · Shift+←/→: 5 giây · Frame ước tính ({version.fps || 30} fps)</p>
-          </div>
+          <VideoPlayerControls
+            time={time}
+            duration={duration}
+            fps={version.fps || 30}
+            playing={playing}
+            volume={volume}
+            ready={ready}
+            saving={saving}
+            capturing={capturing}
+            comments={comments}
+            playbackRate={playbackRate}
+            videoSrc={fileUrl(version.videoPath)}
+            onSeek={seek}
+            onTogglePlay={togglePlay}
+            onVolumeChange={(val) => {
+              setVolume(val)
+              if (videoRef.current) videoRef.current.volume = val
+            }}
+            onPlaybackRateChange={(rate) => {
+              setPlaybackRate(rate)
+              if (videoRef.current) videoRef.current.playbackRate = rate
+            }}
+            onFullscreen={() => {
+              void videoRef.current?.requestFullscreen().catch(() => setError('Không thể bật toàn màn hình.'))
+            }}
+            onPickComment={pickComment}
+          />
         </main>
         <aside className="w-80 shrink-0 overflow-y-auto border-l border-slate-200 bg-white p-4 space-y-4">
           <h2 className="font-bold text-sm">Ghi chú duyệt</h2>
