@@ -9,6 +9,9 @@ Quy ước đặt phiên bản tuân theo [Semantic Versioning](https://semver.o
 ## [Unreleased]
 
 ### Added
+- M5 SRC Library dùng dữ liệu thật: import nhiều file hoặc thư mục con, thumbnail JPEG, tìm/sắp xếp, grid/list và preview video/ảnh; giữ đường dẫn gốc, không copy footage.
+- Migration thumbnail cho DB cũ và kiểm thử SourceService: persistence, dedupe, metadata unknown, validation, quét thư mục và rollback. Smoke test Electron mở rộng cho nhập SRC và cold restart.
+- Smoke test `pnpm test:electron`: chạy Electron production với project/profile tạm, tạo WebM thật, thao tác vẽ bằng chuột, kiểm tra media/JSON và khởi động lại toàn bộ ứng dụng để xác nhận persistence.
 - M4 trên nhánh `dev`: tự capture JPEG khi tạo bình luận; vẽ arrow/rect/ellipse/text, undo/redo, màu và kích thước; lưu annotation JSON + PNG riêng, đọc lại cùng bình luận.
 - Kiểm thử geometry ngang/dọc/4K, capture/callback/fallback và lưu media/annotation qua restart.
 - Nối Review Workspace với SQLite/IPC thật: chọn phiên bản, player và phím tắt, tạo bình luận theo timestamp, lọc/trạng thái và timeline markers.
@@ -18,6 +21,8 @@ Quy ước đặt phiên bản tuân theo [Semantic Versioning](https://semver.o
 - Giao diện dành cho một người dùng local: bỏ hồ sơ tài khoản giả, nhóm/avatar/thêm thành viên, tên tác giả bình luận và thông báo giả; đổi chia sẻ thành xuất gói phản hồi. Không yêu cầu đăng nhập.
 
 ### Fixed
+- Bỏ metadata SRC gán cứng 1080p/30fps/H.264 và các clip/AI score mẫu. File không giải mã được có cảnh báo, không dừng cả batch; nhập lại cùng path không tạo bản ghi trùng.
+- Player xử lý duration WebM ban đầu là Infinity bằng metadata đã import và lắng nghe `durationchange`, tránh timeline 0/seek về đầu.
 - Transaction cho lưu review + attachments + annotation; ghi SQLite qua tệp tạm và dọn ảnh mới khi lưu thất bại. Filename media có suffix ULID, không ghi đè ảnh cũ khi tái sử dụng review ID.
 - Tránh ID bình luận trùng khi xóa một bình luận giữa danh sách; xác thực quan hệ project/version và dữ liệu feedback ở backend.
 

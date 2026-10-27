@@ -114,6 +114,12 @@ function VersionReview({ project, version }: { project: Project; version: EditVe
   }
   const selected = comments.find((item) => item.id === selectedId)
   const visibleComments = comments.filter((item) => filter === 'ALL' || item.status === filter)
+  const syncDuration = (video: HTMLVideoElement) => {
+    const value = video.duration
+    // Some WebM containers initially report Infinity and become finite only
+    // after more data is decoded. Keep the imported duration usable meanwhile.
+    setDuration(Number.isFinite(value) && value > 0 ? value : Math.max(0, version.duration || 0))
+  }
 
   useEffect(() => {
     mounted.current = true
@@ -276,7 +282,8 @@ function VersionReview({ project, version }: { project: Project; version: EditVe
         <main className="flex-1 min-w-[320px] flex flex-col">
           <div className="flex-1 min-h-0 bg-slate-100 p-4 flex items-center justify-center relative">
             <video key={version.id} ref={videoRef} src={fileUrl(version.videoPath)} preload="metadata" className="w-full h-full object-contain bg-black rounded-xl" onClick={togglePlay}
-              onLoadedMetadata={(event) => { const value = event.currentTarget.duration; setDuration(Number.isFinite(value) ? value : 0) }}
+              onLoadedMetadata={(event) => syncDuration(event.currentTarget)}
+              onDurationChange={(event) => syncDuration(event.currentTarget)}
               onLoadedData={() => { setReady(true); setMediaError('') }}
               onTimeUpdate={(event) => setTime(event.currentTarget.currentTime)}
               onSeeked={(event) => setTime(event.currentTarget.currentTime)}

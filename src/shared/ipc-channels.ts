@@ -22,6 +22,7 @@ export const IPC_CHANNELS = {
   // Source assets
   SOURCE_LIST: 'source:list',
   SOURCE_IMPORT: 'source:import',
+  SOURCE_SCAN_DIRECTORY: 'source:scan-directory',
 
   // Revision Package
   PACKAGE_CREATE: 'package:create',

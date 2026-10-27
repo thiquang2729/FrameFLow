@@ -38,6 +38,7 @@ const api = {
   // Source assets
   listSources: (projectId: string) => ipcRenderer.invoke(IPC_CHANNELS.SOURCE_LIST, projectId),
   importSource: (dto: ImportSourceDTO) => ipcRenderer.invoke(IPC_CHANNELS.SOURCE_IMPORT, dto),
+  scanSourceDirectory: (directory: string) => ipcRenderer.invoke(IPC_CHANNELS.SOURCE_SCAN_DIRECTORY, directory),
 
   // Packages
   createPackage: (dto: CreateRevisionPackageDTO) =>

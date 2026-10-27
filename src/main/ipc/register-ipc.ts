@@ -1,5 +1,6 @@
 import { dialog, ipcMain, shell } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
+import { SOURCE_EXTENSIONS } from '@shared/media'
 import {
   CreateCommentDTO,
   CreateProjectDTO,
@@ -44,7 +45,7 @@ export function registerIpcHandlers(
     const result = await dialog.showOpenDialog({
       properties: ['openFile', 'multiSelections'],
       filters: [
-        { name: 'Media Files', extensions: ['mp4', 'mov', 'mkv', 'jpg', 'jpeg', 'png'] },
+        { name: 'Media Files', extensions: SOURCE_EXTENSIONS },
         { name: 'All Files', extensions: ['*'] }
       ]
     })
@@ -114,6 +115,10 @@ export function registerIpcHandlers(
 
   ipcMain.handle(IPC_CHANNELS.SOURCE_IMPORT, async (_, dto: ImportSourceDTO) => {
     return sourceService.importSource(dto)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.SOURCE_SCAN_DIRECTORY, async (_, directory: string) => {
+    return sourceService.scanDirectory(directory)
   })
 
   // --- Package Export ---

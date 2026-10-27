@@ -669,7 +669,9 @@ FrameFlow/
 - Canvas dùng Canvas 2D hiện có thay vì chuyển sang Konva; tọa độ chuẩn hóa 0–1, stroke/font scale theo chiều rộng frame, giữ aspect ratio ảnh dọc/ngang/4K. Text nhập bằng input trong UI (không dùng `window.prompt` của Electron).
 - Lưu review/attachments/annotations trong một transaction; ghi database qua tệp tạm rồi rename, dọn ảnh mới khi lưu lỗi. Mỗi ảnh có suffix ULID để tránh ghi đè khi review ID được tái sử dụng.
 - Git workflow: `main` giữ baseline `6beff8c`; phát triển tính năng trên `dev`, chỉ merge sau khi kiểm tra workflow trực tiếp.
-- **Bước tiếp theo:** kiểm thử M4 trực tiếp trong Electron theo checklist bên dưới, rồi M5 — SRC Library Basic với dữ liệu thật. Filmstrip thumbnail của TASK-PLY-003 và kiểm thử thao tác trực tiếp trong Electron vẫn chưa hoàn tất; chưa đánh dấu toàn bộ M3/M4/MVP Done.
+- **M5 đã triển khai trên `dev`:** SRC Library bỏ toàn bộ sample clips/điểm số/AI summary giả; nhập nhiều file hoặc thư mục đệ quy, thumbnail JPEG lưu bền, metadata thật, tìm tên/đường dẫn, sắp xếp mới/tên/dung lượng, lưới/danh sách và inspector preview video/ảnh. Không copy footage, chỉ lưu đường dẫn canonical và dung lượng từ filesystem; chống nhập trùng trong project, kể cả request đồng thời.
+- Thêm migration `thumbnail_path` cho DB cũ (không xóa dữ liệu), IPC quét thư mục giới hạn 10.000 mục và không đi theo symlink/junction. Import xử lý lỗi từng tệp, timeout/cleanup decoder, dừng công việc renderer khi đổi project. FPS/codec không được suy đoán; duration/resolution không đọc được giữ NULL và UI báo chưa xác định.
+- **Bước tiếp theo:** M6 — Revision Package Export với dữ liệu thật. Smoke test M4/M5 trong Electron đã đạt như báo cáo dưới đây; filmstrip TASK-PLY-003, codec MP4/H.264 thực tế, thao tác fullscreen và video 4K thực tế vẫn chưa được kiểm thử đầy đủ. Chưa đánh dấu toàn bộ MVP Done.
 
 #### Checklist kiểm tra trực tiếp Review Core
 
@@ -688,6 +690,24 @@ FrameFlow/
 4. Thử video dọc, 720p, 1080p và 4K → ảnh không kéo giãn, annotation khớp PNG xuất.
 5. Hủy khi đang soạn → không tạo file/record; bình luận cũ không có ảnh → hiển thị thông báo phù hợp.
 6. Kiểm thử tự động qua `pnpm test`: persistence JSON/media, rollback khi lỗi SQL/ảnh/ghi DB, geometry nhiều resolution, capture/callback/fallback. Chưa thay thế được kiểm tra hình ảnh thực tế trong Electron.
+
+#### Kết quả smoke test Electron — 27/10/2026
+
+- Chạy `pnpm build` rồi `pnpm test:electron` trên Windows, bản renderer production và preload/IPC thật; không mock API của ứng dụng.
+- Tự tạo video WebM/VP8 ngang 640×360 và dọc 360×640 bằng MediaRecorder; dự án, registry và Electron profile nằm trong thư mục tạm riêng, không đọc/ghi registry người dùng.
+- **Đạt:** phát/pause, seek thực tế đến 0.5s, âm lượng, capture JPEG gốc, kéo chuột vẽ 4 loại, đổi màu/nét, undo/redo, lưu JSON/JPEG/PNG qua IPC/SQLite, marker seek, phím D, hủy không tạo file/record và cách ly theo version.
+- **Đạt:** JPEG lưu khớp byte với frame video đang pause; JSON render lại khớp byte PNG đã xuất. Sau khi dừng hẳn tiến trình Electron rồi khởi động mới, project/comment/timestamp 0.5s/status FIXED/annotation vẫn được đọc lại đúng.
+- **Đạt:** không có renderer error; không có UI tài khoản/nhóm/tác giả giả. Có screenshot kiểm tra frame/annotation; artefact lần chạy cuối ở `C:\Users\QuangThi\AppData\Local\Temp\opencode\frameflow-electron-pnUGbC` (thư mục tạm, không đưa media vào repo).
+- **Đã sửa lỗi tìm thấy:** WebM ban đầu báo duration Infinity làm timeline 0 và seek bị clamp về đầu. Player nay dùng duration đã import làm fallback và cập nhật khi nhận `durationchange`.
+- **Giới hạn:** fixture được đăng ký bằng API thật, chưa tự động thao tác native dialog import; chưa xác nhận MP4/H.264, fullscreen hay video 4K bằng playback thực tế. Unit test geometry có 720p/dọc/4K. Đây là smoke test M4, chưa phải toàn bộ E2E MVP.
+
+#### Kết quả SRC Library (M5)
+
+- `pnpm test`: 19 test đạt, gồm 7 test SourceService: metadata/dung lượng thật, không copy nguồn, thumbnail/persistence, dedupe đồng thời, metadata unknown, validation, scan thư mục, rollback và migration DB cũ.
+- Smoke test Electron mở trang SRC trống → click Nhập tư liệu → import video WebM + tệp hỏng → hiển thị warning → Nhập thư mục có video/ảnh trong thư mục con → skip trùng → đủ 4 nguồn và 3 thumbnail thật. Native dialog chỉ được thay phần chọn đường dẫn trong test; UI/probe/canvas/IPC/filesystem/SQLite đều chạy thật.
+- Đã kiểm tra tìm tên có ký tự `#`, chuyển list, sort, preview video và cold restart giữ nguyên source records/metadata/thumbnails. File hỏng được giữ path với metadata trống, không gán thông số giả.
+- Fixture/test profile tách biệt dữ liệu người dùng; ảnh chụp SRC và kết quả test nằm trong thư mục tạm được in bởi `pnpm test:electron`. Các giới hạn codec/4K/native dialog tương tự báo cáo M4 vẫn còn.
+- Lần chạy cuối: `C:\Users\QuangThi\AppData\Local\Temp\opencode\frameflow-electron-uqpWML`. Cả hai tiến trình test thoát mã 0; Chromium ghi `GPU state invalid after WaitForGetOffsetInRange` khi đóng test. Không có renderer error/crash hoặc lỗi đối chiếu ảnh; chưa xác định nguyên nhân log GPU này.
 
 ### Milestone 1: Foundation (TASK-FND)
 

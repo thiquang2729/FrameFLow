@@ -39,6 +39,7 @@ export class DatabaseManager {
       this.db = new engine.Database(fileBuffer)
       this.initSchema()
       this.seedSampleDataIfEmpty()
+      this.persist()
     } else {
       this.db = new engine.Database()
       this.initSchema()
@@ -187,6 +188,7 @@ export class DatabaseManager {
         project_id TEXT NOT NULL,
         original_path TEXT NOT NULL,
         proxy_path TEXT,
+        thumbnail_path TEXT,
         filename TEXT NOT NULL,
         duration REAL,
         width INTEGER,
@@ -256,6 +258,10 @@ export class DatabaseManager {
       CREATE INDEX IF NOT EXISTS idx_sources_project ON source_assets(project_id);
     `
     this.db.run(schema)
+    // Additive migration for projects created before persistent SRC thumbnails.
+    if (!this.query<{ name: string }>('PRAGMA table_info(source_assets)').some((column) => column.name === 'thumbnail_path')) {
+      this.db.run('ALTER TABLE source_assets ADD COLUMN thumbnail_path TEXT')
+    }
   }
 
   public persist(): void {
