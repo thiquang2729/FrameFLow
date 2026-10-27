@@ -92,13 +92,13 @@ export const AnnotationCanvas = React.forwardRef<
   })
 
   return (
-    <div ref={containerRef} className={fit === 'player' ? 'w-full h-full min-h-0 flex items-center justify-center relative' : 'space-y-2'}>
-      {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
-      {!loaded && !error && <p role="status" className="text-xs text-slate-400">Đang tải frame...</p>}
+    <div ref={containerRef} className={fit === 'player' ? 'w-full h-full min-h-0 flex items-center justify-center relative' : 'w-full h-full flex flex-col items-center justify-center'}>
+      {error && <p role="alert" className="text-xs text-red-600 p-2">{error}</p>}
+      {!loaded && !error && <p role="status" className="text-xs text-slate-400 p-2">Đang tải frame...</p>}
       <canvas ref={canvasRef} width={size.width} height={size.height} aria-label={readOnly ? 'Frame đã lưu cùng annotation' : 'Vẽ annotation lên frame'}
         tabIndex={readOnly ? -1 : 0}
         style={fit === 'player' ? { width: size.width * Math.min(viewport.width / size.width, viewport.height / size.height), height: size.height * Math.min(viewport.width / size.width, viewport.height / size.height) } : undefined}
-        className={`block ${fit === 'player' ? '' : 'mx-auto max-w-full max-h-[50vh] w-auto h-auto'} bg-black rounded-lg border border-slate-200 touch-none ${readOnly ? '' : 'cursor-crosshair'}`}
+        className={`block ${fit === 'player' ? 'box-border' : 'max-w-full max-h-full w-auto h-auto mx-auto'} bg-black rounded-lg border border-slate-200 touch-none ${readOnly ? '' : 'cursor-crosshair'}`}
         onPointerDown={(event) => {
           if (readOnly || !loaded || event.button !== 0) return
           event.currentTarget.focus()

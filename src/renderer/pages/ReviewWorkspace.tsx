@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Maximize, MessageSquare, Pause, Play, Plus, SkipBack, SkipForward, Pen } from 'lucide-react'
+import { Maximize, MessageSquare, Pause, Play, Plus, SkipBack, SkipForward, Pen, Volume2 } from 'lucide-react'
 import { Annotation, AnnotationType, CommentCategory, CommentPriority, CommentStatus, EditVersion, Project, ReviewComment } from '@shared/types'
 import { useProjectStore } from '../stores/project.store'
 import { AnnotationCanvas } from '../components/review/AnnotationCanvas'
@@ -97,6 +97,17 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
   const [volume, setVolume] = useState(1)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [filter, setFilter] = useState('ALL')
+  const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number }>({
+    width: version.width || 1920,
+    height: version.height || 1080
+  })
+  const isVertical = videoDimensions.height > videoDimensions.width
+
+  useEffect(() => {
+    if (version.width && version.height) {
+      setVideoDimensions({ width: version.width, height: version.height })
+    }
+  }, [version.width, version.height])
   const [draftTime, setDraftTime] = useState<number | null>(null)
   const [content, setContent] = useState('')
   const [category, setCategory] = useState<CommentCategory>('GENERAL')
@@ -163,6 +174,9 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
     // Some WebM containers initially report Infinity and become finite only
     // after more data is decoded. Keep the imported duration usable meanwhile.
     setDuration(Number.isFinite(value) && value > 0 ? value : Math.max(0, version.duration || 0))
+    if (video.videoWidth && video.videoHeight) {
+      setVideoDimensions({ width: video.videoWidth, height: video.videoHeight })
+    }
   }
 
   useEffect(() => {
@@ -404,9 +418,9 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
                 >
                   <div className="flex gap-2.5 items-start">
                     {thumbUrl ? (
-                      <img src={thumbUrl} alt="" className="w-14 h-10 rounded-lg object-cover shrink-0 bg-black border border-slate-200" />
+                      <img src={thumbUrl} alt="" className={`${isVertical ? 'w-10 h-16' : 'w-14 h-10'} rounded-lg object-cover shrink-0 bg-black border border-slate-200`} />
                     ) : (
-                      <div className="w-14 h-10 rounded-lg bg-slate-100 shrink-0 flex items-center justify-center text-slate-400 border border-slate-200">
+                      <div className={`${isVertical ? 'w-10 h-16' : 'w-14 h-10'} rounded-lg bg-slate-100 shrink-0 flex items-center justify-center text-slate-400 border border-slate-200`}>
                         <MessageSquare size={16} />
                       </div>
                     )}
@@ -429,9 +443,17 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
           </div>
         </aside>
         <main className="flex-1 min-w-[320px] flex flex-col">
-          <div className="p-3 bg-white border-b border-slate-200 shrink-0 space-y-2" aria-label="Công cụ vẽ trên video">
+          <div className="p-2.5 sm:p-3 bg-white border-b border-slate-200 shrink-0 space-y-2" aria-label="Công cụ vẽ trên video">
             <div className="flex flex-wrap justify-between items-center gap-2 text-xs">
-              <span className="font-mono">Frame ~{frameIndex(draftTime ?? time)} · {formatTime(draftTime ?? time)} · {version.name}</span>
+              <div className="flex items-center gap-2">
+                <span className="font-mono">Frame ~{frameIndex(draftTime ?? time)} · {formatTime(draftTime ?? time)} · {version.name}</span>
+                {videoDimensions.width && videoDimensions.height ? (
+                  <span className="font-mono text-[11px] text-slate-400">({videoDimensions.width}×{videoDimensions.height})</span>
+                ) : null}
+                {isVertical && (
+                  <span className="px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 font-semibold text-[10px]">9:16 Dọc</span>
+                )}
+              </div>
               <button aria-label="Bật/tắt vẽ trên frame" aria-pressed={drawingMode} disabled={!ready || loading || capturing || saving || seeking} className={`${buttonClass} flex items-center gap-1 ${drawingMode ? 'bg-blue-50 text-blue-700' : ''}`} onClick={toggleDrawing}><Pen size={14} />{drawingMode ? 'Tắt vẽ (D)' : 'Vẽ trên frame (D)'}</button>
             </div>
             <fieldset disabled={!ready || loading || saving || capturing || seeking}>
@@ -446,37 +468,69 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
               <span className="text-slate-500">{annotations.length} hình · {dirty ? 'Chưa lưu' : 'Chưa thay đổi'}{editingId ? ` · Sửa ${editingId}` : ''}</span>
             </div>}
           </div>
-          <div className="flex-1 min-h-0 bg-slate-100 p-4 flex items-center justify-center relative">
-            <video key={version.id} ref={videoRef} src={fileUrl(version.videoPath)} preload="metadata" className="w-full h-full object-contain bg-black rounded-xl" onClick={togglePlay}
-              onLoadedMetadata={(event) => syncDuration(event.currentTarget)}
-              onDurationChange={(event) => syncDuration(event.currentTarget)}
-              onLoadedData={() => { setReady(true); setMediaError('') }}
-              onTimeUpdate={(event) => setTime(event.currentTarget.currentTime)}
-              onSeeking={() => setSeeking(true)}
-              onSeeked={(event) => { setTime(event.currentTarget.currentTime); setSeeking(false) }}
-              onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)}
-              onError={() => { setReady(false); setPlaying(false); setMediaError('Không mở được video. Tệp có thể đã bị di chuyển hoặc codec không được hỗ trợ. Hãy thử MP4 H.264.') }} />
-            {frame && draftTime !== null ? <div className={`absolute inset-4 bg-black rounded-xl ${drawingMode ? '' : 'pointer-events-none'}`}>
-              <AnnotationCanvas ref={canvasRef} fit="player" imageSrc={frame} annotations={annotations} onAnnotationsChange={changeAnnotations} currentTool={tool} currentColor={color} strokeWidth={strokeWidth} textContent={text} readOnly={!drawingMode || saving} />
-            </div> : !playing && !seeking && savedFrame && activeComment ? <div className="absolute inset-4 bg-black rounded-xl pointer-events-none">
-              <AnnotationCanvas key={activeComment.id} fit="player" imageSrc={savedFrame} annotations={activeComment.annotations || []} currentTool={tool} currentColor={color} strokeWidth={strokeWidth} readOnly />
-            </div> : null}
-            {mediaError && <p role="alert" className="absolute inset-x-8 p-4 rounded-xl bg-white text-red-700 text-xs">{mediaError}</p>}
-          </div>
-          <div className="bg-white border-t p-4 space-y-4">
-            <div className="flex justify-between gap-2 items-center text-xs">
-              <span className="font-mono">{formatTime(time)} / {formatTime(duration)}</span>
-              <div className="flex gap-2">
-                <button aria-label="Frame trước" className={buttonClass} disabled={!ready || saving || capturing} onClick={() => seek(time - 1 / (version.fps || 30))}><SkipBack size={14} /></button>
-                <button aria-label={playing ? 'Tạm dừng' : 'Phát'} className={buttonClass} disabled={!ready || saving || capturing} onClick={togglePlay}>{playing ? <Pause size={14} /> : <Play size={14} />}</button>
-                <button aria-label="Frame tiếp" className={buttonClass} disabled={!ready || saving || capturing} onClick={() => seek(time + 1 / (version.fps || 30))}><SkipForward size={14} /></button>
-              </div>
-              <button aria-label="Toàn màn hình" className={buttonClass} onClick={() => { void videoRef.current?.requestFullscreen().catch(() => setError('Không thể bật toàn màn hình.')) }}><Maximize size={14} /></button>
+          <div className={`flex-1 min-h-0 ${isVertical ? 'bg-slate-950/95 p-2 sm:p-3' : 'bg-slate-900 p-4'} flex items-center justify-center relative overflow-hidden select-none`}>
+            <div
+              className={`relative flex items-center justify-center ${
+                isVertical
+                  ? 'rounded-2xl shadow-2xl border-2 border-slate-700/80 bg-black overflow-hidden'
+                  : 'w-full h-full rounded-xl bg-black overflow-hidden'
+              }`}
+              style={
+                isVertical
+                  ? {
+                      aspectRatio: `${videoDimensions.width} / ${videoDimensions.height}`,
+                      maxHeight: '100%',
+                      maxWidth: '100%'
+                    }
+                  : undefined
+              }
+            >
+              <video key={version.id} ref={videoRef} src={fileUrl(version.videoPath)} preload="metadata" className="w-full h-full object-contain bg-black" onClick={togglePlay}
+                onLoadedMetadata={(event) => syncDuration(event.currentTarget)}
+                onDurationChange={(event) => syncDuration(event.currentTarget)}
+                onLoadedData={() => { setReady(true); setMediaError('') }}
+                onTimeUpdate={(event) => setTime(event.currentTarget.currentTime)}
+                onSeeking={() => setSeeking(true)}
+                onSeeked={(event) => { setTime(event.currentTarget.currentTime); setSeeking(false) }}
+                onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)}
+                onError={() => { setReady(false); setPlaying(false); setMediaError('Không mở được video. Tệp có thể đã bị di chuyển hoặc codec không được hỗ trợ. Hãy thử MP4 H.264.') }} />
+              {frame && draftTime !== null ? <div className={`absolute inset-0 bg-black ${drawingMode ? '' : 'pointer-events-none'}`}>
+                <AnnotationCanvas ref={canvasRef} fit="player" imageSrc={frame} annotations={annotations} onAnnotationsChange={changeAnnotations} currentTool={tool} currentColor={color} strokeWidth={strokeWidth} textContent={text} readOnly={!drawingMode || saving} />
+              </div> : !playing && !seeking && savedFrame && activeComment ? <div className="absolute inset-0 bg-black pointer-events-none">
+                <AnnotationCanvas key={activeComment.id} fit="player" imageSrc={savedFrame} annotations={activeComment.annotations || []} currentTool={tool} currentColor={color} strokeWidth={strokeWidth} readOnly />
+              </div> : null}
+              {isVertical && (
+                <div className="absolute top-2.5 right-2.5 pointer-events-none px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-white/90 text-[10px] font-mono border border-white/10 flex items-center gap-1 shadow-sm">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  9:16 Dọc
+                </div>
+              )}
             </div>
-            <label className="flex items-center gap-2 text-xs">Âm lượng <input aria-label="Âm lượng" type="range" min="0" max="1" step="0.05" value={volume} onChange={(event) => { const value = Number(event.target.value); setVolume(value); if (videoRef.current) videoRef.current.volume = value }} /></label>
-            <input aria-label="Vị trí phát video" type="range" min="0" max={duration || 1} step="0.001" value={Math.min(time, duration)} disabled={!ready || saving || capturing} onChange={(event) => seek(Number(event.target.value))} className="w-full" />
-            <div className="relative h-7 mx-2 bg-slate-50 rounded-lg" aria-label="Marker bình luận">
-              {duration > 0 && comments.map((comment) => <button key={comment.id} aria-label={`${formatTime(comment.timestamp)}: ${comment.content}`} title={`${formatTime(comment.timestamp)}: ${comment.content}`} disabled={capturing || saving} onClick={() => pickComment(comment)} style={{ left: `${Math.min(100, comment.timestamp / duration * 100)}%` }} className={`absolute top-1 -translate-x-1/2 w-5 h-5 rounded-full border-2 border-white ${comment.status === 'FIXED' ? 'bg-emerald-500' : 'bg-blue-500'}`} />)}
+            {mediaError && <p role="alert" className="absolute inset-x-8 p-4 rounded-xl bg-white text-red-700 text-xs shadow-lg">{mediaError}</p>}
+          </div>
+          <div className="bg-white border-t p-3 space-y-2.5">
+            <div className="flex flex-wrap justify-between gap-3 items-center text-xs">
+              <div className="flex items-center gap-3">
+                <span className="font-mono">{formatTime(time)} / {formatTime(duration)}</span>
+                <div className="flex gap-1.5">
+                  <button aria-label="Frame trước" className={buttonClass} disabled={!ready || saving || capturing} onClick={() => seek(time - 1 / (version.fps || 30))}><SkipBack size={14} /></button>
+                  <button aria-label={playing ? 'Tạm dừng' : 'Phát'} className={buttonClass} disabled={!ready || saving || capturing} onClick={togglePlay}>{playing ? <Pause size={14} /> : <Play size={14} />}</button>
+                  <button aria-label="Frame tiếp" className={buttonClass} disabled={!ready || saving || capturing} onClick={() => seek(time + 1 / (version.fps || 30))}><SkipForward size={14} /></button>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                  <Volume2 size={14} className="text-slate-400 shrink-0" />
+                  <input aria-label="Âm lượng" type="range" min="0" max="1" step="0.05" value={volume} onChange={(event) => { const value = Number(event.target.value); setVolume(value); if (videoRef.current) videoRef.current.volume = value }} className="w-20" />
+                </label>
+                <button aria-label="Toàn màn hình" className={buttonClass} onClick={() => { void videoRef.current?.requestFullscreen().catch(() => setError('Không thể bật toàn màn hình.')) }}><Maximize size={14} /></button>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <input aria-label="Vị trí phát video" type="range" min="0" max={duration || 1} step="0.001" value={Math.min(time, duration)} disabled={!ready || saving || capturing} onChange={(event) => seek(Number(event.target.value))} className="w-full" />
+              <div className="relative h-4 mx-2 bg-slate-100 rounded" aria-label="Marker bình luận">
+                {duration > 0 && comments.map((comment) => <button key={comment.id} aria-label={`${formatTime(comment.timestamp)}: ${comment.content}`} title={`${formatTime(comment.timestamp)}: ${comment.content}`} disabled={capturing || saving} onClick={() => pickComment(comment)} style={{ left: `${Math.min(100, comment.timestamp / duration * 100)}%` }} className={`absolute top-0.5 -translate-x-1/2 w-3.5 h-3.5 rounded-full border border-white shadow-xs ${comment.status === 'FIXED' ? 'bg-emerald-500' : 'bg-blue-500'}`} />)}
+              </div>
             </div>
             <p className="text-[10px] text-slate-400">Space: phát/dừng · C: bình luận · D: bật/tắt vẽ · ←/→: frame · Shift+←/→: 5 giây · Frame ước tính ({version.fps || 30} fps)</p>
           </div>
@@ -495,7 +549,16 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
                   <span className="font-semibold text-slate-700">Hình vẽ trên frame</span>
                   <span className="text-slate-500 font-mono">{annotations.length} nét vẽ</span>
                 </div>
-                <div className="rounded-xl overflow-hidden border border-slate-200 bg-black aspect-video flex items-center justify-center">
+                <div
+                  className={`rounded-xl overflow-hidden border border-slate-200 bg-black flex items-center justify-center mx-auto ${
+                    isVertical ? 'aspect-[9/16] max-h-[340px] w-auto' : 'aspect-video w-full'
+                  }`}
+                  style={
+                    isVertical && videoDimensions.width && videoDimensions.height
+                      ? { aspectRatio: `${videoDimensions.width} / ${videoDimensions.height}` }
+                      : undefined
+                  }
+                >
                   <AnnotationCanvas
                     fit="preview"
                     imageSrc={frame}
@@ -533,7 +596,16 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
                     <span className="font-semibold text-slate-700">Hình vẽ trên frame</span>
                     <span className="text-slate-500 font-mono">{selected.annotations?.length || 0} nét vẽ</span>
                   </div>
-                  <div className="rounded-xl overflow-hidden border border-slate-200 bg-black aspect-video flex items-center justify-center">
+                  <div
+                    className={`rounded-xl overflow-hidden border border-slate-200 bg-black flex items-center justify-center mx-auto ${
+                      isVertical ? 'aspect-[9/16] max-h-[340px] w-auto' : 'aspect-video w-full'
+                    }`}
+                    style={
+                      isVertical && videoDimensions.width && videoDimensions.height
+                        ? { aspectRatio: `${videoDimensions.width} / ${videoDimensions.height}` }
+                        : undefined
+                    }
+                  >
                     <AnnotationCanvas
                       key={selected.id}
                       fit="preview"

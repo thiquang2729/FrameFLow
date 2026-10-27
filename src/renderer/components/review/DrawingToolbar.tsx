@@ -63,11 +63,7 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
   ]
 
   return (
-    <div className="space-y-3 pt-2 text-xs select-none">
-      <div className="flex items-center justify-between">
-        <span className="font-bold text-slate-900 text-xs">Công cụ vẽ</span>
-      </div>
-
+    <div className="space-y-2 pt-0.5 text-xs select-none">
       {/* Tool Buttons Row */}
       <div className="grid grid-cols-4 lg:grid-cols-8 gap-1.5">
         {tools.map((t, idx) => {
@@ -78,7 +74,7 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
               key={idx}
               type="button"
               onClick={() => setCurrentTool(t.id)}
-              className={`p-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all ${
+              className={`py-1.5 px-2 rounded-lg flex flex-col items-center justify-center gap-1 transition-all ${
                 isSelected
                   ? 'bg-blue-600 text-white shadow-sm'
                   : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/80'
@@ -98,7 +94,7 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
           type="button"
           onClick={onUndo}
           disabled={!canUndo}
-          className="p-2 rounded-xl flex flex-col items-center justify-center gap-1 bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/80 disabled:opacity-40 transition-all"
+          className="py-1.5 px-2 rounded-lg flex flex-col items-center justify-center gap-1 bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/80 disabled:opacity-40 transition-all"
           title="Hoàn tác"
         >
           <Undo2 className="w-4 h-4" />
@@ -110,7 +106,7 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
           type="button"
           onClick={onRedo}
           disabled={!canRedo}
-          className="p-2 rounded-xl flex flex-col items-center justify-center gap-1 bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/80 disabled:opacity-40 transition-all"
+          className="py-1.5 px-2 rounded-lg flex flex-col items-center justify-center gap-1 bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/80 disabled:opacity-40 transition-all"
           title="Làm lại"
         >
           <Redo2 className="w-4 h-4" />
@@ -119,9 +115,9 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
       </div>
 
       {/* Colors & Sizes Row */}
-      <div className="flex items-center justify-between pt-1">
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
         {/* Colors */}
-        <div className="space-y-1.5">
+        <div className="flex items-center gap-2">
           <span className="text-[11px] font-semibold text-slate-500">Màu sắc</span>
           <div className="flex items-center gap-1.5">
             {colors.map((c) => (
@@ -145,8 +141,8 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
         </div>
 
         {/* Stroke Sizes */}
-        <div className="space-y-1.5 text-right">
-          <span className="text-[11px] font-semibold text-slate-500">Kích thước</span>
+        <div className="flex items-center gap-2 justify-end">
+          <span className="text-[11px] font-semibold text-slate-500">Nét</span>
           <div className="flex items-center gap-1.5 justify-end">
             {strokeSizes.map((s) => (
               <button
