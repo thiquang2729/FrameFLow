@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Maximize, MessageSquare, Pause, Play, Plus, SkipBack, SkipForward, Pen, Volume2 } from 'lucide-react'
 import { Annotation, AnnotationType, CommentCategory, CommentPriority, CommentStatus, EditVersion, Project, ReviewComment } from '@shared/types'
 import { useProjectStore } from '../stores/project.store'
@@ -42,6 +43,16 @@ function ProjectReview({ project }: { project: Project }): React.ReactElement {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(() =>
+    typeof document !== 'undefined' ? document.getElementById('topbar-actions') : null
+  )
+
+  useLayoutEffect(() => {
+    if (!portalTarget) {
+      setPortalTarget(document.getElementById('topbar-actions'))
+    }
+  }, [portalTarget])
+
   useEffect(() => {
     let cancelled = false
     window.api.listVersions(project.id).then((list: EditVersion[]) => {
@@ -55,24 +66,63 @@ function ProjectReview({ project }: { project: Project }): React.ReactElement {
     return () => { cancelled = true }
   }, [project.id])
 
+  useEffect(() => {
+    if (initialVersionId && versions.some((v) => v.id === initialVersionId)) {
+      setVersionId(initialVersionId)
+    }
+  }, [initialVersionId, versions])
+
   const version = versions.find((item) => item.id === versionId)
+
+  const headerActions = (
+    <div className="flex items-center gap-2">
+      <select
+        aria-label="Phiên bản đang duyệt"
+        className="rounded-lg border border-slate-200 bg-white p-2 text-xs max-w-xs cursor-pointer hover:border-slate-300 transition"
+        value={versionId}
+        onChange={(event) => {
+          if (selectVersion(event.target.value)) setVersionId(event.target.value)
+        }}
+        disabled={!versions.length}
+      >
+        {!versions.length && <option value="">Chưa có bản dựng</option>}
+        {versions.map((item) => (
+          <option key={item.id} value={item.id}>
+            V{item.versionNumber} — {item.name}
+          </option>
+        ))}
+      </select>
+      <button className={`${buttonClass} whitespace-nowrap`} onClick={() => setActiveTab('versions')}>
+        Nhập bản dựng
+      </button>
+      <button className={`${buttonClass} whitespace-nowrap`} onClick={() => setActiveTab('export')}>
+        Xuất phản hồi
+      </button>
+    </div>
+  )
+
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#f8fafc] text-slate-800">
-      <header className="flex flex-wrap items-center justify-between gap-4 p-4 border-b border-slate-200 bg-white">
-        <div><h1 className="font-bold text-lg">{project.name}</h1><p className="text-xs text-slate-500">Duyệt bản dựng · Phản hồi được lưu riêng theo phiên bản</p></div>
-        <div className="flex flex-wrap items-center gap-2">
-          <select aria-label="Phiên bản đang duyệt" className="rounded-lg border border-slate-200 bg-white p-2 text-xs max-w-xs" value={versionId} onChange={(event) => { if (selectVersion(event.target.value)) setVersionId(event.target.value) }} disabled={!versions.length}>
-            {!versions.length && <option value="">Chưa có bản dựng</option>}
-            {versions.map((item) => <option key={item.id} value={item.id}>V{item.versionNumber} — {item.name}</option>)}
-          </select>
-          <button className={`${buttonClass} whitespace-nowrap`} onClick={() => setActiveTab('versions')}>Nhập bản dựng</button>
-          <button className={`${buttonClass} whitespace-nowrap`} onClick={() => setActiveTab('export')}>Xuất phản hồi</button>
+      {portalTarget && createPortal(headerActions, portalTarget)}
+      {loading ? (
+        <p role="status" className="p-8 text-xs text-slate-500">
+          Đang tải phiên bản...
+        </p>
+      ) : error ? (
+        <p role="alert" className="p-8 text-red-600 text-xs">
+          {error}
+        </p>
+      ) : version ? (
+        <VersionReview key={version.id} project={project} version={version} initialCommentId={initialCommentId} />
+      ) : (
+        <div className="flex-1 flex flex-col items-center justify-center gap-3 text-slate-500">
+          <MessageSquare />
+          <p>Nhập video trong mục Phiên bản để bắt đầu review.</p>
+          <button className={buttonClass} onClick={() => setActiveTab('versions')}>
+            Đến Phiên bản
+          </button>
         </div>
-      </header>
-      {loading ? <p role="status" className="p-8">Đang tải phiên bản...</p>
-        : error ? <p role="alert" className="p-8 text-red-600">{error}</p>
-        : version ? <VersionReview key={version.id} project={project} version={version} initialCommentId={initialCommentId} />
-        : <div className="flex-1 flex flex-col items-center justify-center gap-3 text-slate-500"><MessageSquare /><p>Nhập video trong mục Phiên bản để bắt đầu review.</p><button className={buttonClass} onClick={() => setActiveTab('versions')}>Đến Phiên bản</button></div>}
+      )}
     </div>
   )
 }

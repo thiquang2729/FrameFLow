@@ -17,23 +17,34 @@ export const TopBar: React.FC = () => {
 
   return (
     <header className="h-14 px-8 border-b border-slate-200 flex items-center justify-between shrink-0 select-none bg-white">
-      {/* Breadcrumb Navigation */}
-      <div className="flex items-center gap-2.5 text-xs">
-        <span className="text-slate-500 font-medium">Dự án</span>
-        <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-        <span className={subLabel ? 'text-slate-700 font-medium' : 'text-blue-600 font-semibold'}>
+      {/* Breadcrumb Navigation / Project Title */}
+      <div className="flex items-center gap-2.5 text-xs min-w-0">
+        <span className="text-slate-400 font-medium">Dự án</span>
+        <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+        <h1 className="font-bold text-slate-900 text-sm truncate max-w-xs" title={activeProject?.name}>
           {activeProject ? activeProject.name : 'Chọn dự án'}
-        </span>
+        </h1>
         {subLabel && (
           <>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-blue-600 font-semibold">{subLabel}</span>
+            <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+            <span className="text-blue-600 font-semibold text-xs whitespace-nowrap">{subLabel}</span>
           </>
         )}
       </div>
 
-      {error ? <p role="alert" className="text-xs text-red-600 max-w-md truncate" title={error}>{error}</p>
-        : <p role={isLoading ? 'status' : undefined} className="text-[11px] text-slate-400">{isLoading ? 'Đang tải dự án...' : 'Local · Cá nhân'}</p>}
+      {/* Right Actions / Status */}
+      <div className="flex items-center gap-3 shrink-0">
+        <div id="topbar-actions" className="flex items-center gap-2" />
+        {error ? (
+          <p role="alert" className="text-xs text-red-600 max-w-md truncate" title={error}>
+            {error}
+          </p>
+        ) : isLoading ? (
+          <p role="status" className="text-[11px] text-slate-400">
+            Đang tải dự án...
+          </p>
+        ) : null}
+      </div>
     </header>
   )
 }
