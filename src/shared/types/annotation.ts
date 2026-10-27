@@ -1,4 +1,4 @@
-export type AnnotationType = 'ARROW' | 'RECT' | 'CIRCLE' | 'TEXT'
+export type AnnotationType = 'ARROW' | 'RECT' | 'CIRCLE' | 'TEXT' | 'PEN' | 'HIGHLIGHT'
 
 export interface Point {
   x: number // Normalized percentage (0.0 to 1.0)

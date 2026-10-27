@@ -665,7 +665,24 @@ FrameFlow/
 - Backend kiểm tra project–version, timestamp, nội dung, enums; sửa ID trùng khi xóa bình luận giữa danh sách và giữ frame 0.
 - **Yêu cầu xác nhận:** ứng dụng local cho một người; không đăng nhập/tài khoản, nhóm, mời thành viên, chia sẻ cộng tác hay nhiều tác giả bình luận. Đã bỏ profile giả, avatar, nhóm và tên tác giả trên UI. Giữ field `created_by` hiện có để tương thích dữ liệu, không dùng làm hệ thống tài khoản.
 - Kiểm thử tự động: `pnpm test` (ReviewService với SQLite thật: persistence khi mở lại, tách version, sort, frame 0, ID sau xóa, validation và trạng thái).
-- **Bước tiếp theo:** M4 — capture frame tự động khi tạo bình luận, nối AnnotationCanvas/toolbar với ảnh thật và lưu annotation. Filmstrip thumbnail của TASK-PLY-003 và kiểm thử thao tác trực tiếp trong Electron vẫn chưa hoàn tất; chưa đánh dấu toàn bộ M3/MVP Done.
+- **M4 đã triển khai trên `dev`:** tạo bình luận tự chụp JPEG ở resolution gốc; ưu tiên timestamp từ `requestVideoFrameCallback`, fallback frame đã decode nếu video pause không phát callback. Nối canvas ảnh thật với arrow/rect/ellipse/text, màu/kích thước, undo/redo; lưu object JSON và PNG riêng, mở lại bình luận render annotation từ JSON. Ảnh gốc không bị ghi đè.
+- Canvas dùng Canvas 2D hiện có thay vì chuyển sang Konva; tọa độ chuẩn hóa 0–1, stroke/font scale theo chiều rộng frame, giữ aspect ratio ảnh dọc/ngang/4K. Text nhập bằng input trong UI (không dùng `window.prompt` của Electron).
+- Lưu review/attachments/annotations trong một transaction; ghi database qua tệp tạm rồi rename, dọn ảnh mới khi lưu lỗi. Mỗi ảnh có suffix ULID để tránh ghi đè khi review ID được tái sử dụng.
+- Git workflow: `main` giữ baseline `6beff8c`; phát triển tính năng trên `dev`, chỉ merge sau khi kiểm tra workflow trực tiếp.
+- **M5 đã triển khai trên `dev`:** SRC Library bỏ toàn bộ sample clips/điểm số/AI summary giả; nhập nhiều file hoặc thư mục đệ quy, thumbnail JPEG lưu bền, metadata thật, tìm tên/đường dẫn, sắp xếp mới/tên/dung lượng, lưới/danh sách và inspector preview video/ảnh. Không copy footage, chỉ lưu đường dẫn canonical và dung lượng từ filesystem; chống nhập trùng trong project, kể cả request đồng thời.
+- Thêm migration `thumbnail_path` cho DB cũ (không xóa dữ liệu), IPC quét thư mục giới hạn 10.000 mục và không đi theo symlink/junction. Import xử lý lỗi từng tệp, timeout/cleanup decoder, dừng công việc renderer khi đổi project. FPS/codec không được suy đoán; duration/resolution không đọc được giữ NULL và UI báo chưa xác định.
+- **M6 đã triển khai trên `dev`:** màn hình Export không còn mock/simulate. Chọn source version thật, target label, bình luận theo status/priority, instructions tối đa 2.000 ký tự; preview file/byte count và review.json qua IPC. Mặc định không chọn FIXED/REJECTED nhưng có thể chọn thủ công; filter không tự bỏ các item đang được chọn.
+- Export gồm đúng `review.json`, `README.md`, `instructions.md`, `frames/`, `annotated/`. Context dự án nằm trong Markdown; JSON giữ source version ID, timestamp, frame ước tính, status và đường dẫn ảnh tương đối. Không giả lập gửi agent hay thêm SRC/preferences/locked segments chưa có chức năng.
+- Backend kiểm tra ownership/version/selection, path containment cả realpath/symlink, cảnh báo legacy comment không có frame và chặn ảnh có attachment record nhưng file thiếu. Preview read-only; tạo gói sẽ kiểm tra lại, build vào staging riêng rồi publish thư mục ULID và ghi DB transaction. Lỗi lưu dọn gói mới, không sửa gói cũ.
+- **M6 đã commit:** `d2e20c2` trên `dev`; chưa merge vào `main`.
+- **M7 integration/polish đã triển khai:** Dashboard/VersionList dùng số liệu, preview, lineage và empty/loading/error state thật; bỏ ảnh ngoài mạng, timeline/deadline giả và ô tìm kiếm toàn cục chưa hoạt động. Sidebar có tìm project thật và chỉ còn các module MVP đang hoạt động.
+- Chọn version ở Versions → Review → Export giữ đúng version ID; feedback từ Dashboard mở đúng comment/timestamp. Scope dữ liệu được reset khi đổi project; store bỏ response chọn project/thống kê cũ. ProjectService hợp nhất request mở DB đồng thời để không sinh nhiều connection ghi đè nhau.
+- Không seed project mẫu trong DB mới, không xóa row có sẵn của dự án cũ. Tên project trùng luôn tạo folder/DB riêng có suffix ULID; giữ Unicode và ngăn tên biến thành đường dẫn ngoài thư mục được chọn. Stats lọc project_id, tính OPEN/IN_PROGRESS/PARTIAL là chưa xong và HIGH/CRITICAL là ưu tiên cao.
+- Import version đọc metadata/timeout/cleanup bằng browser probe thật, có xác thực path/file/number/parent/metadata và chặn version number trùng. FPS là giá trị người dùng nhập để ước tính frame, không giả vờ được tự phát hiện. Canvas annotation co theo viewport giữ aspect ratio; seek bình luận sớm được chờ đến khi video sẵn sàng.
+- **M7 đã commit:** `23178bf` trên `dev`; chưa merge vào `main`.
+- **Kiểm tra bản Windows đóng gói đã đạt:** thêm `electron-builder.yml`, tạo EXE unpacked và installer NSIS x64 local. SQLite WASM được unpack khỏi ASAR; build scripts khóa `--publish never`. Installer unsigned, icon Electron mặc định, chưa chạy cài/gỡ.
+- `pnpm test:packaged` chạy EXE thật qua localhost DevTools Protocol tạm, không có test hook trong code app; dùng registry/profile/project/video riêng ở thư mục tạm. Đã xác nhận WebM/VP8 3840×2160 và MP4/H.264 640×360 qua playback → capture → arrow annotation → export PNG đúng resolution → cold restart. Đây là fixture ngắn tự tạo, chưa phải footage camera dài/bitrate cao.
+- **Bước tiếp theo:** filmstrip TASK-PLY-003, cảnh báo rời comment chưa lưu, fullscreen/native file dialog, footage H.264/VFR/4K thực tế và thử cài/gỡ installer trên máy sạch. Xem `doc/RELEASE_CHECKLIST.md`; macOS/Linux và log GPU lúc đóng test vẫn chưa được xác nhận/xử lý. Chưa đánh dấu toàn bộ MVP Done.
 
 #### Checklist kiểm tra trực tiếp Review Core
 
@@ -675,6 +692,59 @@ FrameFlow/
 4. Click bình luận/marker → video seek; đổi trạng thái → lọc theo trạng thái.
 5. Đổi phiên bản/dự án → không lẫn bình luận; khởi động lại app → dữ liệu còn nguyên.
 6. Thử phiên bản không có tệp hoặc codec không hỗ trợ → hiển thị lỗi; dự án chưa có video/bình luận → empty state, không dùng dữ liệu mẫu trong Review.
+
+#### Checklist kiểm tra trực tiếp Capture & Annotation (M4)
+
+1. Mở video, seek và đợi frame → C hoặc D → kiểm tra JPEG preview khớp hình và timestamp.
+2. Vẽ arrow/rectangle/ellipse; chọn Text, nhập nội dung rồi click để đặt. Thử kéo ra ngoài canvas, undo/redo, đổi màu và kích thước.
+3. Lưu → kiểm tra `frames/` có JPEG gốc, `annotations/` có PNG; mở bình luận sau app restart vẫn có drawing JSON như trước.
+4. Thử video dọc, 720p, 1080p và 4K → ảnh không kéo giãn, annotation khớp PNG xuất.
+5. Hủy khi đang soạn → không tạo file/record; bình luận cũ không có ảnh → hiển thị thông báo phù hợp.
+6. Kiểm thử tự động qua `pnpm test`: persistence JSON/media, rollback khi lỗi SQL/ảnh/ghi DB, geometry nhiều resolution, capture/callback/fallback. Chưa thay thế được kiểm tra hình ảnh thực tế trong Electron.
+
+#### Kết quả smoke test Electron — 27/10/2026
+
+- Chạy `pnpm build` rồi `pnpm test:electron` trên Windows, bản renderer production và preload/IPC thật; không mock API của ứng dụng.
+- Tự tạo video WebM/VP8 ngang 640×360 và dọc 360×640 bằng MediaRecorder; dự án, registry và Electron profile nằm trong thư mục tạm riêng, không đọc/ghi registry người dùng.
+- **Đạt:** phát/pause, seek thực tế đến 0.5s, âm lượng, capture JPEG gốc, kéo chuột vẽ 4 loại, đổi màu/nét, undo/redo, lưu JSON/JPEG/PNG qua IPC/SQLite, marker seek, phím D, hủy không tạo file/record và cách ly theo version.
+- **Đạt:** JPEG lưu khớp byte với frame video đang pause; JSON render lại khớp byte PNG đã xuất. Sau khi dừng hẳn tiến trình Electron rồi khởi động mới, project/comment/timestamp 0.5s/status FIXED/annotation vẫn được đọc lại đúng.
+- **Đạt:** không có renderer error; không có UI tài khoản/nhóm/tác giả giả. Có screenshot kiểm tra frame/annotation; artefact lần chạy cuối ở `C:\Users\QuangThi\AppData\Local\Temp\opencode\frameflow-electron-pnUGbC` (thư mục tạm, không đưa media vào repo).
+- **Đã sửa lỗi tìm thấy:** WebM ban đầu báo duration Infinity làm timeline 0 và seek bị clamp về đầu. Player nay dùng duration đã import làm fallback và cập nhật khi nhận `durationchange`.
+- **Giới hạn:** fixture được đăng ký bằng API thật, chưa tự động thao tác native dialog import; chưa xác nhận MP4/H.264, fullscreen hay video 4K bằng playback thực tế. Unit test geometry có 720p/dọc/4K. Đây là smoke test M4, chưa phải toàn bộ E2E MVP.
+
+#### Kết quả SRC Library (M5)
+
+- `pnpm test`: 19 test đạt, gồm 7 test SourceService: metadata/dung lượng thật, không copy nguồn, thumbnail/persistence, dedupe đồng thời, metadata unknown, validation, scan thư mục, rollback và migration DB cũ.
+- Smoke test Electron mở trang SRC trống → click Nhập tư liệu → import video WebM + tệp hỏng → hiển thị warning → Nhập thư mục có video/ảnh trong thư mục con → skip trùng → đủ 4 nguồn và 3 thumbnail thật. Native dialog chỉ được thay phần chọn đường dẫn trong test; UI/probe/canvas/IPC/filesystem/SQLite đều chạy thật.
+- Đã kiểm tra tìm tên có ký tự `#`, chuyển list, sort, preview video và cold restart giữ nguyên source records/metadata/thumbnails. File hỏng được giữ path với metadata trống, không gán thông số giả.
+- Fixture/test profile tách biệt dữ liệu người dùng; ảnh chụp SRC và kết quả test nằm trong thư mục tạm được in bởi `pnpm test:electron`. Các giới hạn codec/4K/native dialog tương tự báo cáo M4 vẫn còn.
+- Lần chạy cuối: `C:\Users\QuangThi\AppData\Local\Temp\opencode\frameflow-electron-uqpWML`. Cả hai tiến trình test thoát mã 0; Chromium ghi `GPU state invalid after WaitForGetOffsetInRange` khi đóng test. Không có renderer error/crash hoặc lỗi đối chiếu ảnh; chưa xác định nguyên nhân log GPU này.
+
+#### Kết quả Revision Package Export (M6)
+
+- Build/typecheck đạt; `pnpm test` đạt 29/29, bao gồm 10 test ExportService với SQLite thật: preview không ghi file/DB, byte count UTF-8 chính xác, selection/sort/frame 0/status, giữ context/instructions tiếng Việt, copy byte ảnh, mở lại DB, xuất đồng thời không ghi đè, validation, thiếu media sau preview, traversal/symlink/junction và rollback khi ghi DB lỗi.
+- Smoke test Electron: chọn source version thật, xác nhận FIXED không được chọn mặc định → chọn thủ công → nhập target/instructions → preview 5 file thật → đổi filter không làm mất item đã chọn → xuất hai gói khác thư mục → kiểm tra JSON/JPEG/PNG/Markdown → restart cả ứng dụng vẫn còn đủ hai gói.
+- Nút Mở thư mục truyền đúng đường dẫn qua preload/IPC; test thay `shell.openPath` để không mở cửa sổ Explorer ngoài test. Không thử gửi agent hoặc dùng dịch vụ mạng.
+- Preview và create dùng chung builder; create kiểm tra lại attachment ở thời điểm xuất. Bình luận legacy chưa có ảnh vẫn xuất nội dung kèm warning; attachment record có file bị mất thì chặn xuất.
+- Tên file ảnh trong gói được đánh số (`frames/0001.jpg`, `annotated/0001.png`...), không phụ thuộc tên file/ID không tin cậy; `review.json` luôn liên kết đúng ảnh. Thư mục gói dùng version number hợp lệ + ULID, không chứa target label tự nhập.
+- Chưa khẳng định package đã được một AI agent bên ngoài thực thi thành công. Kiểm thử M6 xác nhận định dạng, liên kết ảnh, dữ liệu và persistence của gói local; các giới hạn codec/4K và log GPU khi đóng test đã ghi ở trên vẫn còn.
+
+#### Kết quả Integration & Polish (M7)
+
+- Build/typecheck đạt; `pnpm test` đạt 36/36. Test mới kiểm tra project không có seed giả, tên trùng không dùng chung DB, connection load đồng thời, stats đúng project/status/priority, version lineage/metadata/validation và store chống response IPC cũ khi đổi project.
+- `pnpm test:electron` nay tạo project và import hai version qua giao diện thật (chỉ kiểm soát đường dẫn trả về từ native dialog), thay vì dùng API tạo fixture entity trực tiếp. Metadata, lineage, parser browser, preload/IPC, SQLite và filesystem chạy thật.
+- Workflow đạt: create project → import version → play/seek → comment → capture → draw 4 tools → undo/redo → save → đổi trạng thái → import SRC → export hai package → cold restart giữ dữ liệu. Đã thử keyboard Space, C/D, ←/→, Shift+←/→, 1/2/3 ưu tiên và Ctrl+Enter.
+- Kiểm tra thêm: version cũ mở đúng video và Export không nhảy về latest; project mới có thống kê 0 (không mượn số liệu project trước); đổi lại project giữ thống kê thật; feedback gần đây mở đúng version và seek 0.5s. Tìm project ở Sidebar hoạt động.
+- Screenshot/artefact: `C:\Users\QuangThi\AppData\Local\Temp\opencode\frameflow-electron-WB2EU6`. Không có renderer error/crash; log Chromium GPU lúc đóng test vẫn có, chưa xác định nguyên nhân. Các mục kiểm tra trước phát hành bên trên vẫn chưa được xác nhận.
+
+#### Kết quả kiểm tra Windows đóng gói
+
+- `pnpm build:unpack` và `pnpm build:win` thành công trên Windows x64 / Electron 33.4.11. Artefact local: `release/win-unpacked/FrameFlow.exe` và `release/FrameFlow-0.1.0-setup.exe` (~96 MB decimal).
+- `Get-AuthenticodeSignature` xác nhận installer `NotSigned`. Không cài đặt, publish hay dùng credential ký số; `release/` không đưa vào Git.
+- `pnpm test:packaged` đạt trên chính EXE trong `win-unpacked`, không dùng dev server hoặc Electron harness thay thế app. Assert renderer đến từ `app.asar`; preload, IPC và SQLite/WASM hoạt động sau restart.
+- Case đã thực thi (không skip): `video/webm;codecs=vp8` 3840×2160 và `video/mp4;codecs=avc1.42001f` 640×360. Test kiểm codec ID trong container, playback, capture, preview aspect ratio, lưu arrow JSON + JPEG + PNG, export package và cold restart; notes rỗng, không có renderer exception.
+- Report/screenshot/log: `C:\Users\QuangThi\AppData\Local\Temp\opencode\frameflow-packaged-qOjvIS`. Unit/service/store test vẫn 36/36 đạt.
+- Chưa thử installer execution/upgrade/uninstall, footage camera, performance dài hạn, audio/VFR, macOS/Linux hoặc ký số/branding riêng. Những mục này nằm trong release checklist, không suy diễn từ smoke test tự động.
 
 ### Milestone 1: Foundation (TASK-FND)
 
@@ -820,20 +890,21 @@ TASK-FND-001 (Scaffolding)
 
 ### MVP V0.1 — Definition of Done tổng thể
 
-- [ ] Tạo project local với folder structure
-- [ ] Import video file làm Edit Version
-- [ ] Video player hoạt động (play/pause/seek/frame step)
-- [ ] Tạo review comment tại timestamp chính xác
-- [ ] Auto-capture frame khi tạo comment
-- [ ] Vẽ annotation (arrow, rect, circle, text) lên captured frame
-- [ ] Comment list hiển thị + click to seek
-- [ ] Timeline markers tại vị trí comment
-- [ ] Comment status tracking (OPEN/FIXED/PARTIAL/REJECTED)
-- [ ] Keyboard shortcuts hoạt động
-- [ ] Import SRC files (metadata only)
-- [ ] Export Revision Package (review.json + frames/ + annotated/)
-- [ ] Tất cả data persist qua app restart (SQLite)
-- [ ] App chạy trên Windows (primary), macOS (secondary)
+- [x] Tạo project local với folder structure
+- [x] Import video file làm Edit Version
+- [x] Video player hoạt động (play/pause/seek/frame step ước tính)
+- [x] Tạo review comment tại timestamp (đã kiểm tra WebM; không bảo đảm exact frame cho mọi codec)
+- [x] Auto-capture frame khi tạo comment
+- [x] Vẽ annotation (arrow, rect, circle, text) lên captured frame
+- [x] Comment list hiển thị + click to seek
+- [x] Timeline markers tại vị trí comment
+- [x] Comment status tracking (OPEN/FIXED/PARTIAL/REJECTED)
+- [x] Keyboard shortcuts hoạt động (1/2/3 khi không focus ô nhập)
+- [x] Import SRC files (metadata cơ bản; FPS/codec chưa xác định giữ unknown)
+- [x] Export Revision Package (review.json + frames/ + annotated/)
+- [x] Data persist qua app restart (SQLite), đã xác nhận workflow smoke test
+- [x] App chạy trên Windows (unpacked EXE đã kiểm thử, installer đã build nhưng chưa chạy cài/gỡ)
+- [ ] macOS (secondary) — chưa build/chạy kiểm thử
 
 ---
 

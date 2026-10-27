@@ -1,407 +1,74 @@
 import React, { useEffect, useState } from 'react'
-import {
-  Folder,
-  Film,
-  MessageSquare,
-  Play,
-  ArrowRight,
-  MoreVertical,
-  Volume2,
-  Maximize,
-  Target,
-  Calendar,
-  Check,
-  FileText,
-  Upload,
-  ChevronDown,
-} from 'lucide-react'
+import { EditVersion, Project, ProjectStats, ReviewComment } from '@shared/types'
 import { useProjectStore } from '../stores/project.store'
-import { EditVersion, ReviewComment } from '@shared/types'
+import { localFileUrl } from '../lib/source-media'
+
+const buttonClass = 'px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium hover:bg-slate-50 disabled:opacity-40'
+const statusLabels: Record<string, string> = { PLANNING: 'Lên kế hoạch', INGESTING: 'Nhập tư liệu', EDITING: 'Đang dựng', REVIEW: 'Đang duyệt', REVIEWING: 'Đang duyệt', FINAL: 'Hoàn tất' }
+const reviewStatuses = { OPEN: 'Đang mở', IN_PROGRESS: 'Đang xử lý', FIXED: 'Đã sửa', PARTIAL: 'Sửa một phần', REJECTED: 'Từ chối' }
 
 export const Dashboard: React.FC = () => {
-  const { activeProject, stats, setActiveTab } = useProjectStore()
-  const [versions, setVersions] = useState<EditVersion[]>([])
-  const [recentComments, setRecentComments] = useState<ReviewComment[]>([])
-  const [currentVersion, setCurrentVersion] = useState<EditVersion | null>(null)
+  const project = useProjectStore((state) => state.activeProject)
+  if (!project) return <div className="flex-1 p-8 text-slate-500">Chưa chọn dự án. Tạo dự án mới hoặc chọn dự án từ sidebar.</div>
+  return <ProjectDashboard key={project.id} project={project} />
+}
+
+function ProjectDashboard({ project }: { project: Project }): React.ReactElement {
+  const { setActiveTab, openReview, selectVersion } = useProjectStore()
+  const [stats, setStats] = useState<ProjectStats | null>(null)
+  const [latest, setLatest] = useState<EditVersion | null>(null)
+  const [recent, setRecent] = useState<ReviewComment[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [mediaError, setMediaError] = useState('')
+  const [reload, setReload] = useState(0)
 
   useEffect(() => {
-    if (!activeProject) return
-
-    window.api.listVersions(activeProject.id).then((list: EditVersion[]) => {
-      setVersions(list)
-      if (list.length > 0) {
-        const latest = list[list.length - 1]
-        setCurrentVersion(latest)
-        window.api.listComments(activeProject.id, latest.id).then((comms: ReviewComment[]) => {
-          setRecentComments(comms.slice(0, 4))
-        })
-      } else {
-        setCurrentVersion(null)
-        setRecentComments([])
-      }
-    })
-  }, [activeProject])
-
-  if (!activeProject) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#f8fafc]">
-        <Folder className="w-12 h-12 text-slate-400 mb-3" />
-        <h2 className="text-base font-bold text-slate-800">Chưa chọn dự án</h2>
-        <p className="text-xs text-slate-500 mt-1 max-w-sm">
-          Chọn một dự án từ danh sách bên trái hoặc nhấn "Dự án mới" để bắt đầu.
-        </p>
-      </div>
-    )
-  }
-
-  // Format seconds to MM:SS
-  const formatTime = (secs: number) => {
-    const m = Math.floor(secs / 60)
-    const s = Math.floor(secs % 60)
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
-  }
+    let cancelled = false
+    setLoading(true)
+    setError('')
+    setMediaError('')
+    const load = async () => {
+      const [counts, versions] = await Promise.all([window.api.getProjectStats(project.id), window.api.listVersions(project.id)])
+      const current: EditVersion | null = versions[versions.length - 1] || null
+      const comments: ReviewComment[] = current ? await window.api.listComments(project.id, current.id) : []
+      if (cancelled) return
+      setStats(counts)
+      setLatest(current)
+      setRecent(comments.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 4))
+    }
+    void load().catch(() => { if (!cancelled) setError('Không tải được tổng quan. Vui lòng thử lại.') })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [project.id, reload])
 
   return (
-    <div className="flex-1 overflow-y-auto p-8 space-y-6 bg-[#f8fafc] text-slate-800">
-      {/* 1. Project Header Row */}
-      <div className="flex items-start justify-between">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-            {activeProject.name}
-          </h1>
-          <div className="flex items-center gap-2.5 text-xs text-slate-500 font-medium">
-            <span>{activeProject.targetPlatform || 'Thương hiệu'}</span>
-            <span>•</span>
-            <span>00:45–{formatTime(activeProject.targetDuration || 60)}</span>
-            <span>•</span>
-            <span>{activeProject.aspectRatio || '16:9'}</span>
-            <span>•</span>
-            <span>Tạo ngày {new Date(activeProject.createdAt).toLocaleDateString('vi-VN', { day: 'numeric', month: 'numeric', year: 'numeric' })}</span>
-            <span>•</span>
-            <span>Cập nhật 2 giờ trước</span>
-          </div>
+    <div className="flex-1 p-6 overflow-y-auto min-w-0 space-y-5 bg-[#f8fafc] text-slate-800">
+      <header className="flex flex-wrap justify-between gap-3"><div><h1 className="font-bold text-2xl">{project.name}</h1><p className="text-xs text-slate-500 mt-1">{project.targetPlatform || 'Chưa có nền tảng'} · {project.aspectRatio || 'Chưa có tỉ lệ'} · Mục tiêu: {project.targetDuration ?? 'chưa nhập'} giây</p></div><button className={buttonClass} disabled={loading} onClick={() => setReload((value) => value + 1)}>Làm mới tổng quan</button></header>
+      {loading ? <p role="status" className="text-xs text-slate-500">Đang tải tổng quan...</p> : error ? <p role="alert" className="text-xs text-red-700">{error}</p> : <>
+        <section className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+          {[
+            ['Tư liệu SRC', stats?.sourceCount ?? 0], ['Phiên bản dựng', stats?.versionCount ?? 0],
+            ['Phản hồi chưa xong', stats?.openReviewCount ?? 0], ['Ưu tiên cao/khẩn cấp chưa xong', stats?.highPriorityCount ?? 0]
+          ].map(([label, count]) => <div key={label} className="p-4 bg-white border rounded-2xl"><h2 className="text-xs text-slate-500">{label}</h2><p aria-label={String(label)} className="font-bold text-2xl mt-2">{count}</p></div>)}
+        </section>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+          <section className="p-4 bg-white border rounded-2xl space-y-4">
+            <h2 className="text-sm font-bold">Bản dựng hiện tại</h2>
+            {latest ? <>
+              <video key={latest.id} src={localFileUrl(latest.videoPath)} controls preload="metadata" className={`w-full object-contain bg-black rounded-xl ${latest.width && latest.height && latest.height > latest.width ? 'max-h-[340px] aspect-[9/16] mx-auto block' : 'aspect-video'}`} onError={() => setMediaError('Không phát được bản dựng. Kiểm tra vị trí tệp hoặc codec.')} />
+              {mediaError && <p role="alert" className="text-xs text-red-700">{mediaError}</p>}
+              <div><h3 className="font-semibold text-sm">V{latest.versionNumber} — {latest.name}{latest.width && latest.height && latest.height > latest.width && <span className="ml-2 px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 font-semibold text-[10px]">9:16 Dọc</span>}</h3><p className="text-xs text-slate-500 mt-1">{latest.duration ? `${latest.duration.toFixed(2)}s` : 'Chưa rõ thời lượng'} · {latest.width && latest.height ? `${latest.width}×${latest.height}` : 'Chưa rõ độ phân giải'}</p></div>
+              <div className="flex flex-wrap gap-2"><button className={`${buttonClass} bg-blue-600 text-white hover:bg-blue-700`} onClick={() => openReview(latest.id)}>Duyệt bản dựng hiện tại</button><button className={buttonClass} onClick={() => { selectVersion(latest.id); setActiveTab('export') }}>Xuất gói phản hồi</button></div>
+            </> : <div className="p-6 border border-dashed rounded-xl space-y-3 text-center text-slate-500"><p className="text-sm">Chưa có bản dựng.</p><button className={buttonClass} onClick={() => setActiveTab('versions')}>Nhập bản dựng đầu tiên</button></div>}
+            <button className={`${buttonClass} w-full`} onClick={() => setActiveTab('versions')}>Xem tất cả phiên bản</button>
+          </section>
+          <section className="p-4 bg-white border rounded-2xl space-y-3"><h2 className="text-sm font-bold">Phản hồi gần đây{latest ? ` · ${latest.name}` : ''}</h2>
+            {!recent.length ? <p className="text-xs text-slate-500">Chưa có phản hồi cho bản dựng hiện tại.</p> : recent.map((comment) => <button key={comment.id} aria-label={`Mở phản hồi ${comment.id}`} className="w-full text-left p-3 bg-slate-50 border rounded-xl space-y-2 hover:bg-blue-50" onClick={() => openReview(comment.editVersionId, comment.id)}><p className="text-xs font-semibold">{comment.id} · {comment.timestamp.toFixed(3)}s · {reviewStatuses[comment.status]}</p><p className="text-xs whitespace-pre-wrap break-words">{comment.content}</p><p className="text-[11px] text-slate-400">{new Date(comment.createdAt).toLocaleString('vi-VN')}</p></button>)}
+          </section>
         </div>
-
-        {/* Right Action Cluster */}
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setActiveTab('export')}
-            className="flex items-center gap-2 px-3.5 h-9 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors shadow-2xs"
-          >
-            <Upload className="w-3.5 h-3.5" />
-            <span>Xuất gói phản hồi</span>
-          </button>
-
-          {/* Mở trong chế độ duyệt Button */}
-          <button
-            type="button"
-            onClick={() => setActiveTab('review')}
-            className="flex items-center gap-2 px-4 h-9 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl transition-colors shadow-sm"
-          >
-            <Play className="w-3.5 h-3.5 fill-current" />
-            <span>Mở trong chế độ duyệt</span>
-          </button>
-        </div>
-      </div>
-
-      {/* 2. Top 4 Metric Cards */}
-      <div className="grid grid-cols-4 gap-4">
-        {/* Card 1: Tổng số clip SRC */}
-        <div className="p-4 bg-white border border-slate-200/80 rounded-2xl flex items-center gap-4 shadow-2xs">
-          <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
-            <Folder className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 font-medium">Tổng số clip SRC</p>
-            <p className="text-2xl font-bold text-slate-900 tracking-tight mt-0.5">
-              {stats?.sourceCount || 128}
-            </p>
-            <p className="text-[11px] text-slate-400 mt-0.5">Đã thêm 12 clip trong tuần này</p>
-          </div>
-        </div>
-
-        {/* Card 2: Phiên bản dựng */}
-        <div className="p-4 bg-white border border-slate-200/80 rounded-2xl flex items-center gap-4 shadow-2xs">
-          <div className="w-11 h-11 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 shrink-0">
-            <Film className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 font-medium">Phiên bản dựng</p>
-            <p className="text-2xl font-bold text-slate-900 tracking-tight mt-0.5">
-              {stats?.versionCount || (versions.length > 0 ? versions.length : 3)}
-            </p>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              {currentVersion ? currentVersion.name : 'Bản dựng V3'} mới nhất
-            </p>
-          </div>
-        </div>
-
-        {/* Card 3: Phản hồi đang mở */}
-        <div className="p-4 bg-white border border-slate-200/80 rounded-2xl flex items-center gap-4 shadow-2xs">
-          <div className="w-11 h-11 rounded-xl bg-red-50 flex items-center justify-center text-red-500 shrink-0">
-            <MessageSquare className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 font-medium">Phản hồi đang mở</p>
-            <p className="text-2xl font-bold text-slate-900 tracking-tight mt-0.5">
-              {stats?.openReviewCount !== undefined ? stats.openReviewCount : 5}
-            </p>
-            <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
-              <span>{stats?.highPriorityCount || 3} ưu tiên cao</span>
-            </p>
-          </div>
-        </div>
-
-        {/* Card 4: Trạng thái hiện tại */}
-        <div className="p-4 bg-white border border-slate-200/80 rounded-2xl flex items-center justify-between shadow-2xs">
-          <div className="flex items-center gap-4">
-            {/* Donut progress ring */}
-            <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
-              <svg className="w-6 h-6 -rotate-90" viewBox="0 0 36 36">
-                <circle cx="18" cy="18" r="14" fill="none" stroke="#e2e8f0" strokeWidth="3" />
-                <circle
-                  cx="18"
-                  cy="18"
-                  r="14"
-                  fill="none"
-                  stroke="#2563eb"
-                  strokeWidth="3"
-                  strokeDasharray="88"
-                  strokeDashoffset="26"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </div>
-            <div>
-              <p className="text-xs text-slate-500 font-medium">Trạng thái hiện tại</p>
-              <p className="text-base font-bold text-slate-900 mt-0.5">Đang duyệt</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">Hạn: 12 thg 4, 2025</p>
-            </div>
-          </div>
-          <ChevronDown className="w-4 h-4 text-slate-400" />
-        </div>
-      </div>
-
-      {/* 3. Middle Row: Bản dựng hiện tại (7 cols) + Phản hồi gần đây (5 cols) */}
-      <div className="grid grid-cols-12 gap-6">
-        {/* Left (7 cols): Bản dựng hiện tại Card */}
-        <div className="col-span-7 bg-white border border-slate-200/80 rounded-2xl p-5 flex flex-col justify-between shadow-2xs">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-bold text-slate-900">Bản dựng hiện tại</h2>
-            <button
-              type="button"
-              onClick={() => setActiveTab('versions')}
-              className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1.5 transition-colors"
-            >
-              <span>Xem tất cả các phiên bản</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {/* Video Preview Container */}
-          <div className="relative aspect-video bg-black rounded-xl overflow-hidden border border-slate-200 flex items-center justify-center group shadow-sm">
-            {currentVersion ? (
-              <video
-                src={`file:///${currentVersion.videoPath.replace(/\\/g, '/')}`}
-                className="w-full h-full object-cover"
-                controls={false}
-              />
-            ) : (
-              <img
-                src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=1200&q=80"
-                alt="Bản dựng Preview"
-                className="w-full h-full object-cover opacity-90"
-              />
-            )}
-
-            {/* Centered Play Button */}
-            <button
-              type="button"
-              onClick={() => setActiveTab('review')}
-              className="absolute w-12 h-12 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white flex items-center justify-center shadow-xl group-hover:scale-110 group-hover:bg-blue-600 transition-all"
-            >
-              <Play className="w-5 h-5 fill-current ml-0.5" />
-            </button>
-
-            {/* Video Player Bottom Scrub Bar */}
-            <div className="absolute bottom-0 inset-x-0 p-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex items-center justify-between text-xs text-white">
-              <div className="flex items-center gap-3">
-                <Play className="w-3.5 h-3.5 fill-current cursor-pointer" />
-                <span className="font-mono text-[11px] text-slate-200">00:00 / 00:48</span>
-              </div>
-              <div className="flex items-center gap-3 text-slate-200">
-                <Volume2 className="w-4 h-4 cursor-pointer hover:text-white" />
-                <Maximize className="w-3.5 h-3.5 cursor-pointer hover:text-white" />
-                <MoreVertical className="w-3.5 h-3.5 cursor-pointer hover:text-white" />
-              </div>
-            </div>
-          </div>
-
-          {/* Draft Metadata & Phát trong chế độ duyệt button */}
-          <div className="flex items-center justify-between mt-4 pt-1">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-sm text-slate-900">
-                  {currentVersion ? currentVersion.name : 'Bản dựng V3'}
-                </span>
-                <span className="px-2 py-0.5 text-[10px] bg-blue-50 text-blue-600 font-bold border border-blue-200 rounded-md">
-                  MỚI NHẤT
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-1">
-                {currentVersion ? `${formatTime(currentVersion.duration || 0)} • ${currentVersion.width}×${currentVersion.height} • ${new Date(currentVersion.createdAt).toLocaleString('vi-VN')}` : 'Chưa nhập bản dựng'}
-              </p>
-            </div>
-
-            {/* Phát trong chế độ duyệt with split dropdown */}
-            <div className="flex items-center rounded-xl bg-blue-600 hover:bg-blue-700 shadow-sm text-white transition-colors overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setActiveTab('review')}
-                className="px-3.5 py-2 text-xs font-semibold flex items-center gap-2"
-              >
-                <Play className="w-3.5 h-3.5 fill-current" />
-                <span>Phát trong chế độ duyệt</span>
-              </button>
-              <div className="w-[1px] h-4 bg-blue-400/40" />
-              <button type="button" className="px-2 py-2 hover:bg-black/10">
-                <ChevronDown className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Right (5 cols): Phản hồi gần đây Card */}
-        <div className="col-span-5 bg-white border border-slate-200/80 rounded-2xl p-5 flex flex-col shadow-2xs">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-bold text-slate-900">Phản hồi gần đây</h2>
-            <button
-              type="button"
-              onClick={() => setActiveTab('review')}
-              className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1.5 transition-colors"
-            >
-              <span>Xem tất cả</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {/* Feedback items list (exact match to Vietnamese mockup) */}
-          <div className="space-y-3 flex-1 overflow-y-auto">
-            {recentComments.length > 0 ? (
-              recentComments.map((c) => {
-                const isOpen = c.status !== 'FIXED'
-                return (
-                  <div
-                    key={c.id}
-                    onClick={() => setActiveTab('review')}
-                    className="p-3 bg-slate-50 hover:bg-slate-100/80 border border-slate-200/70 rounded-xl cursor-pointer transition-colors flex items-start gap-3 group"
-                  >
-                    {/* Thumbnail with timestamp badge */}
-                    <div className="relative w-16 h-11 bg-slate-200 rounded-lg overflow-hidden shrink-0 border border-slate-300">
-                      <div className="w-full h-full bg-slate-300" />
-                      <span className="absolute bottom-1 right-1 px-1 py-0.5 bg-black/80 rounded text-[9px] font-mono text-white">
-                        {formatTime(c.timestamp)}
-                      </span>
-                    </div>
-
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-bold text-slate-900 truncate">{c.category}</p>
-                        <span
-                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase ${
-                            isOpen
-                              ? 'bg-red-50 text-red-600 border-red-200'
-                              : 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                          }`}
-                        >
-                          {isOpen ? 'ĐANG MỞ' : 'ĐÃ SỬA'}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{c.content}</p>
-                      <div className="flex items-center gap-1.5 mt-1.5 text-[10px] text-slate-400">
-                        <span>{new Date(c.createdAt).toLocaleString('vi-VN')}</span>
-                      </div>
-                    </div>
-
-                    <button type="button" className="text-slate-400 hover:text-slate-600 transition-colors p-1">
-                      <MoreVertical className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )
-              })
-            ) : (
-              <p className="text-xs text-slate-500">Chưa có phản hồi. Mở chế độ duyệt để thêm ghi chú của bạn.</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Project context */}
-      <div className="grid grid-cols-2 gap-6">
-        {/* Card 1: Mục tiêu dự án */}
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 flex flex-col justify-between shadow-2xs">
-          <div className="space-y-3">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
-                <Target className="w-4 h-4" />
-              </div>
-              <h3 className="text-sm font-bold text-slate-900">Mục tiêu dự án</h3>
-            </div>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              {activeProject.description ||
-                'Giới thiệu con người, môi trường và tác động của UTH thông qua một video thương hiệu 45–60 giây cho web và mạng xã hội.'}
-            </p>
-          </div>
-
-          <button
-            type="button"
-            className="mt-4 w-fit px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 flex items-center gap-2 transition-colors"
-          >
-            <FileText className="w-3.5 h-3.5 text-slate-400" />
-            <span>Xem brief</span>
-          </button>
-        </div>
-
-        {/* Card 2: Mốc thời gian */}
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 flex flex-col justify-between shadow-2xs">
-          <div className="flex items-center gap-2.5 mb-3">
-            <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
-              <Calendar className="w-4 h-4" />
-            </div>
-            <h3 className="text-sm font-bold text-slate-900">Mốc thời gian</h3>
-          </div>
-
-          <div className="space-y-2.5 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500">Dựng thô</span>
-              <div className="flex items-center gap-2">
-                <span className="text-slate-700 font-mono text-[11px]">20 thg 3, 2025</span>
-                <Check className="w-3.5 h-3.5 text-emerald-500" />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500">Duyệt bản dựng</span>
-              <div className="flex items-center gap-2">
-                <span className="text-slate-700 font-mono text-[11px]">5 thg 4, 2025</span>
-                <span className="w-2.5 h-2.5 rounded-full border-2 border-blue-600 inline-block" />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500">Bàn giao cuối cùng</span>
-              <div className="flex items-center gap-2">
-                <span className="text-slate-700 font-mono text-[11px]">12 thg 4, 2025</span>
-                <span className="w-2.5 h-2.5 rounded-full border-2 border-slate-300 inline-block" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-      </div>
+      </>}
+      <section className="p-4 bg-white border rounded-2xl space-y-3 text-xs"><h2 className="font-bold text-sm">Thông tin dự án</h2><p className="whitespace-pre-wrap break-words text-slate-600">{project.description || 'Chưa có mô tả dự án.'}</p><p>Trạng thái: {statusLabels[project.status] || project.status}</p><p>Tạo: {new Date(project.createdAt).toLocaleString('vi-VN')}</p><p>Cập nhật thông tin: {new Date(project.updatedAt).toLocaleString('vi-VN')}</p><p className="break-all text-slate-500">Lưu trên máy: {project.projectPath}</p></section>
     </div>
   )
 }

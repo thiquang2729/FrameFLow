@@ -62,3 +62,14 @@ export interface UpdateCommentStatusDTO {
   commentId: string
   status: CommentStatus
 }
+
+export interface UpdateCommentDTO {
+  projectId: string
+  editVersionId: string
+  commentId: string
+  category: CommentCategory
+  priority: CommentPriority
+  content: string
+  annotations: Annotation[]
+  annotatedFrameBase64?: string
+}

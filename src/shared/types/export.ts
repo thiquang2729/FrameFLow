@@ -7,6 +7,7 @@ export interface RevisionPackageReviewItem {
   comment: string
   frameImage?: string // e.g. "frames/R021.jpg"
   annotationImage?: string // e.g. "annotated/R021.png"
+  status?: string
 }
 
 export interface RevisionPackageJson {
@@ -16,6 +17,8 @@ export interface RevisionPackageJson {
   exportedAt: string
   instructions?: string
   reviews: RevisionPackageReviewItem[]
+  sourceVersionId?: string
+  projectId?: string
 }
 
 export interface RevisionPackage {
@@ -33,4 +36,11 @@ export interface CreateRevisionPackageDTO {
   targetVersionName: string // e.g. "Draft V3"
   commentIds: string[]
   instructions?: string
+}
+
+export interface RevisionPackagePreview {
+  files: { path: string; size: number }[]
+  totalBytes: number
+  review: RevisionPackageJson
+  warnings: string[]
 }

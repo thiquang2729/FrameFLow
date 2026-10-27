@@ -40,7 +40,7 @@ async function fixture(t) {
   const service = new ReviewService(projects)
   const dto = { projectId: 'proj_uth_intro', editVersionId: 'v1', timestamp: 17.42, category: 'SUBTITLE', priority: 'HIGH', content: '  Move subtitle down  ' }
   return {
-    service, dto, db,
+    service, dto, db, directory,
     reopen: async () => { db.close(); db = new DatabaseManager(dbPath); await db.init() }
   }
 }
@@ -102,4 +102,107 @@ test('persists status changes and prevents updates from another project', async 
   saved = (await service.getComments(dto.projectId, 'v1'))[0]
   assert.equal(saved.status, 'OPEN')
   assert.equal(saved.resolvedAt, null)
+})
+
+// Service tests verify byte preservation, not browser image decoding.
+const frameBase64 = `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0xff, 0xd9]).toString('base64')}`
+const annotatedFrameBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWQAAAABJRU5ErkJggg=='
+const annotation = {
+  id: 'draft-shape', reviewCommentId: '', type: 'ARROW', createdAt: '2026-10-27',
+  data: { type: 'ARROW', color: '#ef4444', strokeWidth: 4, points: [0.1, 0.2, 0.8, 0.7] }
+}
+
+test('saves original JPEG, separate annotated PNG and all shape JSON across reopen', async (t) => {
+  const { service, dto, directory, reopen } = await fixture(t)
+  const shapes = [annotation,
+    { ...annotation, type: 'RECT', data: { type: 'RECT', color: '#2563eb', strokeWidth: 2, x: 0.1, y: 0.2, width: 0.5, height: 0.3 } },
+    { ...annotation, type: 'CIRCLE', data: { type: 'CIRCLE', color: '#10b981', strokeWidth: 6, x: 0.2, y: 0.3, width: 0.4, height: 0.4 } },
+    { ...annotation, type: 'TEXT', data: { type: 'TEXT', color: '#ffffff', strokeWidth: 4, x: 0.1, y: 0.1, text: 'Di chuyển phụ đề', fontSize: 24 } }
+  ]
+  const comment = await service.createComment({ ...dto, frameBase64, annotatedFrameBase64, annotations: shapes })
+  await reopen()
+  const saved = (await service.getComments(dto.projectId, dto.editVersionId))[0]
+  assert.equal(saved.id, comment.id)
+  assert.deepEqual(saved.annotations.map((item) => item.data), shapes.map((item) => item.data))
+  assert.ok(saved.annotations.every((item) => item.reviewCommentId === saved.id))
+  assert.deepEqual(saved.attachments.map((item) => item.type).sort(), ['ANNOTATED_FRAME', 'FRAME'])
+  for (const attachment of saved.attachments) {
+    const expected = attachment.type === 'FRAME' ? frameBase64 : annotatedFrameBase64
+    assert.deepEqual(fs.readFileSync(path.join(directory, attachment.filePath)), Buffer.from(expected.split(',')[1], 'base64'))
+  }
+})
+
+test('rolls back database and removes newly written images when annotation insert fails', async (t) => {
+  const { service, dto, db, directory, reopen } = await fixture(t)
+  db.run("CREATE TRIGGER fail_annotation BEFORE INSERT ON annotations BEGIN SELECT RAISE(ABORT, 'test failure'); END")
+  await assert.rejects(() => service.createComment({ ...dto, frameBase64, annotatedFrameBase64, annotations: [annotation] }))
+  assert.equal(db.get('SELECT COUNT(*) AS count FROM review_comments').count, 0)
+  assert.equal(db.get('SELECT COUNT(*) AS count FROM review_attachments').count, 0)
+  assert.deepEqual(fs.readdirSync(path.join(directory, 'frames')), [])
+  assert.deepEqual(fs.readdirSync(path.join(directory, 'annotations')), [])
+  await reopen()
+  assert.equal((await service.getComments(dto.projectId, dto.editVersionId)).length, 0)
+})
+
+test('does not leave partial comments on image errors and rejects malformed shapes', async (t) => {
+  const { service, dto, directory } = await fixture(t)
+  await assert.rejects(() => service.createComment({ ...dto, frameBase64, annotatedFrameBase64: 'invalid' }))
+  assert.equal((await service.getComments(dto.projectId, dto.editVersionId)).length, 0)
+  assert.deepEqual(fs.readdirSync(path.join(directory, 'frames')), [])
+  for (const data of [
+    { ...annotation.data, points: [0, 0, 2, 1] },
+    { ...annotation.data, strokeWidth: -1 },
+    { ...annotation.data, type: 'TEXT' }
+  ]) await assert.rejects(() => service.createComment({ ...dto, frameBase64, annotatedFrameBase64, annotations: [{ ...annotation, data }] }))
+  await assert.rejects(() => service.createComment({ ...dto, annotations: [annotation] }))
+})
+
+test('transaction restores memory and disk when database persistence fails', async (t) => {
+  const { service, dto, db, reopen } = await fixture(t)
+  const persist = db.persist
+  db.persist = () => { throw new Error('Disk full') }
+  await assert.rejects(() => service.createComment(dto), /Disk full/)
+  db.persist = persist
+  assert.equal((await service.getComments(dto.projectId, dto.editVersionId)).length, 0)
+  await reopen()
+  assert.equal((await service.getComments(dto.projectId, dto.editVersionId)).length, 0)
+})
+
+test('edits pen/highlight on one frame without changing its timestamp, status, original JPEG or another frame', async (t) => {
+  const { service, dto, directory, reopen } = await fixture(t)
+  const first = await service.createComment({ ...dto, frameBase64, annotatedFrameBase64, annotations: [annotation] })
+  const second = await service.createComment({ ...dto, timestamp: 18.42, frameBase64, annotatedFrameBase64, annotations: [annotation] })
+  await service.updateStatus({ projectId: dto.projectId, commentId: first.id, status: 'FIXED' })
+  const original = first.attachments.find((item) => item.type === 'FRAME')
+  const originalBytes = fs.readFileSync(path.join(directory, original.filePath))
+  const shapes = ['PEN', 'HIGHLIGHT'].map((type) => ({ ...annotation, type, data: { ...annotation.data, type, points: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6] } }))
+  const edited = await service.updateComment({ projectId: dto.projectId, editVersionId: dto.editVersionId, commentId: first.id, content: 'Updated visual feedback', category: 'GENERAL', priority: 'MEDIUM', annotations: shapes, annotatedFrameBase64 })
+  assert.equal(edited.timestamp, first.timestamp)
+  assert.equal(edited.frameNumber, first.frameNumber)
+  assert.equal(edited.createdAt, first.createdAt)
+  assert.equal(edited.status, 'FIXED')
+  assert.equal(edited.attachments.find((item) => item.type === 'FRAME').filePath, original.filePath)
+  assert.deepEqual(fs.readFileSync(path.join(directory, original.filePath)), originalBytes)
+  await reopen()
+  const saved = await service.getComments(dto.projectId, dto.editVersionId)
+  assert.deepEqual(saved.find((item) => item.id === first.id).annotations.map((item) => item.type), ['PEN', 'HIGHLIGHT'])
+  assert.deepEqual(saved.find((item) => item.id === second.id).annotations.map((item) => item.type), ['ARROW'])
+  const cleared = await service.updateComment({ projectId: dto.projectId, editVersionId: dto.editVersionId, commentId: first.id, content: 'No drawings now', category: 'GENERAL', priority: 'LOW', annotations: [] })
+  assert.equal(cleared.annotations.length, 0)
+  assert.deepEqual(cleared.attachments.map((item) => item.type), ['FRAME'])
+})
+
+test('editing rejects cross-project/version access and rolls back the old drawing on an insert failure', async (t) => {
+  const { service, dto, db, directory } = await fixture(t)
+  const comment = await service.createComment({ ...dto, frameBase64, annotatedFrameBase64, annotations: [annotation] })
+  const update = { projectId: dto.projectId, editVersionId: dto.editVersionId, commentId: comment.id, content: 'Changed', category: 'GENERAL', priority: 'LOW', annotations: [annotation], annotatedFrameBase64 }
+  await assert.rejects(() => service.updateComment({ ...update, editVersionId: 'v2' }))
+  await assert.rejects(() => service.updateComment({ ...update, projectId: 'proj_riverside' }))
+  const before = fs.readdirSync(path.join(directory, 'annotations')).sort()
+  db.run("CREATE TRIGGER fail_edit BEFORE INSERT ON annotations BEGIN SELECT RAISE(ABORT, 'test failure'); END")
+  await assert.rejects(() => service.updateComment(update))
+  assert.deepEqual(fs.readdirSync(path.join(directory, 'annotations')).sort(), before)
+  const saved = (await service.getComments(dto.projectId, dto.editVersionId))[0]
+  assert.equal(saved.content, comment.content)
+  assert.deepEqual(saved.annotations, comment.annotations)
 })

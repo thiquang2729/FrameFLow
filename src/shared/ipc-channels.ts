@@ -16,14 +16,17 @@ export const IPC_CHANNELS = {
   // Review & Comments
   COMMENT_LIST: 'comment:list',
   COMMENT_CREATE: 'comment:create',
+  COMMENT_UPDATE: 'comment:update',
   COMMENT_UPDATE_STATUS: 'comment:update-status',
   COMMENT_DELETE: 'comment:delete',
 
   // Source assets
   SOURCE_LIST: 'source:list',
   SOURCE_IMPORT: 'source:import',
+  SOURCE_SCAN_DIRECTORY: 'source:scan-directory',
 
   // Revision Package
   PACKAGE_CREATE: 'package:create',
+  PACKAGE_PREVIEW: 'package:preview',
   PACKAGE_OPEN_FOLDER: 'package:open-folder'
 } as const

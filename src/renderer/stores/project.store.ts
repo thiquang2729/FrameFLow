@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { Project, ProjectStats, CreateProjectDTO } from '@shared/types'
+import { confirmNavigation } from '../lib/navigation-guard'
 
 interface ProjectState {
   projects: Project[]
@@ -8,6 +9,8 @@ interface ProjectState {
   activeTab: 'overview' | 'review' | 'versions' | 'src' | 'export'
   isLoading: boolean
   error: string | null
+  activeVersionId: string | null
+  reviewCommentId: string | null
 
   // Actions
   setActiveTab: (tab: 'overview' | 'review' | 'versions' | 'src' | 'export') => void
@@ -16,7 +19,11 @@ interface ProjectState {
   createProject: (dto: CreateProjectDTO) => Promise<Project>
   deleteProject: (projectId: string) => Promise<void>
   refreshStats: () => Promise<void>
+  selectVersion: (versionId: string) => boolean
+  openReview: (versionId: string, commentId?: string) => void
 }
+
+let selectionGeneration = 0
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
   projects: [],
@@ -25,8 +32,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   activeTab: 'overview',
   isLoading: false,
   error: null,
+  activeVersionId: null,
+  reviewCommentId: null,
 
-  setActiveTab: (tab) => set({ activeTab: tab }),
+  setActiveTab: (tab) => { if (tab === get().activeTab || confirmNavigation()) set({ activeTab: tab }) },
+  selectVersion: (versionId) => {
+    if (versionId !== get().activeVersionId && !confirmNavigation()) return false
+    set({ activeVersionId: versionId, reviewCommentId: null })
+    return true
+  },
+  openReview: (versionId, commentId) => { if (confirmNavigation()) set({ activeTab: 'review', activeVersionId: versionId, reviewCommentId: commentId || null }) },
 
   fetchProjects: async () => {
     try {
@@ -45,22 +60,30 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   selectProject: async (projectId: string) => {
+    if (projectId !== get().activeProject?.id && !confirmNavigation()) return
+    const generation = ++selectionGeneration
     try {
-      set({ isLoading: true })
-      const proj = await window.api.getProject(projectId)
-      const stats = await window.api.getProjectStats(projectId)
-      set({ activeProject: proj, stats, isLoading: false })
+      set({ isLoading: true, error: null })
+      const [proj, stats] = await Promise.all([window.api.getProject(projectId), window.api.getProjectStats(projectId)])
+      if (generation !== selectionGeneration) return
+      if (!proj) throw new Error('Không tìm thấy dự án.')
+      const changed = get().activeProject?.id !== projectId
+      set({ activeProject: proj, stats, isLoading: false, ...(changed ? { activeVersionId: null, reviewCommentId: null } : {}) })
     } catch (err: any) {
+      if (generation !== selectionGeneration) return
       set({ error: err.message || 'Failed to select project', isLoading: false })
     }
   },
 
   createProject: async (dto: CreateProjectDTO) => {
+    if (!confirmNavigation()) throw new Error('Hãy lưu hoặc hủy ghi chú frame trước khi tạo dự án.')
+    const generation = ++selectionGeneration
     try {
       set({ isLoading: true, error: null })
       const newProj = await window.api.createProject(dto)
       const updated = [newProj, ...get().projects]
-      set({ projects: updated, activeProject: newProj, isLoading: false })
+      if (generation !== selectionGeneration) { set({ projects: updated }); return newProj }
+      set({ projects: updated, activeProject: newProj, stats: null, activeVersionId: null, reviewCommentId: null, isLoading: false })
       await get().refreshStats()
       return newProj
     } catch (err: any) {
@@ -70,11 +93,14 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   deleteProject: async (projectId: string) => {
+    if (projectId === get().activeProject?.id && !confirmNavigation()) return
     try {
       await window.api.deleteProject(projectId)
       const remaining = get().projects.filter((p) => p.id !== projectId)
+      if (get().activeProject?.id !== projectId) { set({ projects: remaining }); return }
+      ++selectionGeneration
       const nextActive = remaining.length > 0 ? remaining[0] : null
-      set({ projects: remaining, activeProject: nextActive })
+      set({ projects: remaining, activeProject: nextActive, stats: null, activeVersionId: null, reviewCommentId: null })
       if (nextActive) {
         await get().selectProject(nextActive.id)
       } else {
@@ -90,7 +116,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     if (!active) return
     try {
       const stats = await window.api.getProjectStats(active.id)
-      set({ stats })
+      if (get().activeProject?.id === active.id) set({ stats })
     } catch {
       // Ignore background stats refresh error
     }

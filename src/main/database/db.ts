@@ -7,6 +7,7 @@ let SQL: SqlJsStatic | null = null
 export class DatabaseManager {
   private db: Database | null = null
   private dbPath: string
+  private inTransaction = false
 
   constructor(dbPath: string) {
     this.dbPath = dbPath
@@ -37,111 +38,12 @@ export class DatabaseManager {
       const fileBuffer = fs.readFileSync(this.dbPath)
       this.db = new engine.Database(fileBuffer)
       this.initSchema()
-      this.seedSampleDataIfEmpty()
+      this.persist()
     } else {
       this.db = new engine.Database()
       this.initSchema()
-      this.seedSampleDataIfEmpty()
       this.persist()
     }
-  }
-
-  private seedSampleDataIfEmpty(): void {
-    if (!this.db) return
-    const rows = this.query<{ cnt: number }>('SELECT count(*) as cnt FROM projects')
-    if (rows.length > 0 && rows[0].cnt > 0) return
-
-    const now = new Date().toISOString()
-    const homeDir = process.env.USERPROFILE || process.env.HOME || '.'
-    const sampleDir = path.join(homeDir, 'FrameFlowProjects', 'UTH_Video_Intro')
-
-    // Seed 5 sample projects matching the Vietnamese mockups
-    this.run(
-      `INSERT INTO projects (id, name, description, target_platform, target_duration, aspect_ratio, status, project_path, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        'proj_uth_intro',
-        'UTH Video Giới thiệu',
-        'Giới thiệu con người, môi trường và tác động của UTH thông qua một video thương hiệu 45–60 giây cho web và mạng xã hội.',
-        'Thương hiệu',
-        60,
-        '16:9',
-        'REVIEWING',
-        sampleDir,
-        now,
-        now
-      ]
-    )
-
-    this.run(
-      `INSERT INTO projects (id, name, description, target_platform, target_duration, aspect_ratio, status, project_path, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        'proj_riverside',
-        'Thương hiệu Riverside',
-        'Video thương hiệu Riverside phong cách sang trọng.',
-        'Thương hiệu',
-        90,
-        '16:9',
-        'PLANNING',
-        path.join(homeDir, 'FrameFlowProjects', 'Riverside'),
-        now,
-        now
-      ]
-    )
-
-    this.run(
-      `INSERT INTO projects (id, name, description, target_platform, target_duration, aspect_ratio, status, project_path, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        'proj_launch_2025',
-        'Sản phẩm ra mắt 2025',
-        'Chiến dịch ra mắt sản phẩm 2025 định dạng dọc ngắn.',
-        'TikTok',
-        30,
-        '9:16',
-        'PLANNING',
-        path.join(homeDir, 'FrameFlowProjects', 'ProductLaunch2025'),
-        now,
-        now
-      ]
-    )
-
-    this.run(
-      `INSERT INTO projects (id, name, description, target_platform, target_duration, aspect_ratio, status, project_path, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        'proj_customer_story',
-        'Câu chuyện khách hàng',
-        'Phỏng vấn trải nghiệm khách hàng và giải pháp.',
-        'YouTube',
-        120,
-        '16:9',
-        'PLANNING',
-        path.join(homeDir, 'FrameFlowProjects', 'CustomerStory'),
-        now,
-        now
-      ]
-    )
-
-    this.run(
-      `INSERT INTO projects (id, name, description, target_platform, target_duration, aspect_ratio, status, project_path, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        'proj_internal_comm',
-        'Truyền thông nội bộ',
-        'Bản tin video nội bộ công ty quý 1.',
-        'Nội bộ',
-        45,
-        '16:9',
-        'PLANNING',
-        path.join(homeDir, 'FrameFlowProjects', 'InternalComm'),
-        now,
-        now
-      ]
-    )
-
-    this.persist()
   }
 
   private initSchema(): void {
@@ -186,6 +88,7 @@ export class DatabaseManager {
         project_id TEXT NOT NULL,
         original_path TEXT NOT NULL,
         proxy_path TEXT,
+        thumbnail_path TEXT,
         filename TEXT NOT NULL,
         duration REAL,
         width INTEGER,
@@ -255,13 +158,44 @@ export class DatabaseManager {
       CREATE INDEX IF NOT EXISTS idx_sources_project ON source_assets(project_id);
     `
     this.db.run(schema)
+    // Additive migration for projects created before persistent SRC thumbnails.
+    if (!this.query<{ name: string }>('PRAGMA table_info(source_assets)').some((column) => column.name === 'thumbnail_path')) {
+      this.db.run('ALTER TABLE source_assets ADD COLUMN thumbnail_path TEXT')
+    }
   }
 
   public persist(): void {
-    if (!this.db) return
+    if (!this.db || this.inTransaction) return
     const data = this.db.export()
     const buffer = Buffer.from(data)
-    fs.writeFileSync(this.dbPath, buffer)
+    const temporaryPath = `${this.dbPath}.tmp`
+    try {
+      fs.writeFileSync(temporaryPath, buffer)
+      fs.renameSync(temporaryPath, this.dbPath)
+    } finally {
+      if (fs.existsSync(temporaryPath)) fs.unlinkSync(temporaryPath)
+    }
+  }
+
+  // Synchronous operations only: commit the whole review and its relations once.
+  public transaction<T>(operation: () => T): T {
+    if (!this.db || !SQL) throw new Error('Database not initialized')
+    if (this.inTransaction) throw new Error('Nested transactions are not supported')
+    const snapshot = this.db.export()
+    this.db.run('BEGIN TRANSACTION')
+    this.inTransaction = true
+    try {
+      const result = operation()
+      this.db.run('COMMIT')
+      this.inTransaction = false
+      this.persist()
+      return result
+    } catch (error) {
+      this.inTransaction = false
+      this.db.close()
+      this.db = new SQL.Database(snapshot)
+      throw error
+    }
   }
 
   public run(sql: string, params: (string | number | null | undefined)[] = []): void {

@@ -9,13 +9,31 @@ Quy ước đặt phiên bản tuân theo [Semantic Versioning](https://semver.o
 ## [Unreleased]
 
 ### Added
+- Cấu hình electron-builder cho Windows x64, artefact unpacked/NSIS unsigned và checklist phát hành; build scripts không publish.
+- `pnpm test:packaged` kiểm tra EXE thật: preload/IPC/SQLite/WASM, WebM/VP8 4K và MP4/H.264 (fixture tự tạo), capture/annotation/export đúng resolution và cold restart với dữ liệu tạm riêng.
+- M7 integration: Dashboard/Versions dùng dữ liệu thật, tìm project, trạng thái tải/lỗi/trống; import version qua browser probe có timeout và lineage/FPS ước tính do người dùng nhập.
+- Smoke test tạo project/import version qua UI và kiểm tra đầy đủ phím tắt, điều hướng version/comment, project isolation và workflow sau restart; thêm test project/version/store race conditions.
+- M6 Revision Package Export thật: chọn version/feedback, lọc status/priority, instructions, preview JSON/file sizes và tạo folder local chứa README.md, review.json, instructions.md, frames/, annotated/.
+- Bộ kiểm thử ExportService và smoke test Electron xác nhận export hai lần không ghi đè, ảnh/instructions đúng nội dung và package còn sau restart.
+- M5 SRC Library dùng dữ liệu thật: import nhiều file hoặc thư mục con, thumbnail JPEG, tìm/sắp xếp, grid/list và preview video/ảnh; giữ đường dẫn gốc, không copy footage.
+- Migration thumbnail cho DB cũ và kiểm thử SourceService: persistence, dedupe, metadata unknown, validation, quét thư mục và rollback. Smoke test Electron mở rộng cho nhập SRC và cold restart.
+- Smoke test `pnpm test:electron`: chạy Electron production với project/profile tạm, tạo WebM thật, thao tác vẽ bằng chuột, kiểm tra media/JSON và khởi động lại toàn bộ ứng dụng để xác nhận persistence.
+- M4 trên nhánh `dev`: tự capture JPEG khi tạo bình luận; vẽ arrow/rect/ellipse/text, undo/redo, màu và kích thước; lưu annotation JSON + PNG riêng, đọc lại cùng bình luận.
+- Kiểm thử geometry ngang/dọc/4K, capture/callback/fallback và lưu media/annotation qua restart.
 - Nối Review Workspace với SQLite/IPC thật: chọn phiên bản, player và phím tắt, tạo bình luận theo timestamp, lọc/trạng thái và timeline markers.
 - Kiểm thử ReviewService bằng SQLite: lưu/mở lại, cách ly phiên bản, validation, frame 0, ID sau xóa và cập nhật trạng thái.
 
 ### Changed
+- Ngừng seed project mẫu ở database mới (không xóa dữ liệu cũ), bỏ số liệu/ảnh/deadline giả và các controls/module chưa hoạt động. Project trùng tên có thư mục/DB riêng theo ULID.
+- Bỏ export giả và các tùy chọn AI/SRC/preferences/locked segments chưa triển khai. Nút xuất chỉ tạo dữ liệu local, không giả lập gửi agent.
 - Giao diện dành cho một người dùng local: bỏ hồ sơ tài khoản giả, nhóm/avatar/thêm thành viên, tên tác giả bình luận và thông báo giả; đổi chia sẻ thành xuất gói phản hồi. Không yêu cầu đăng nhập.
 
 ### Fixed
+- Giữ version ID xuyên suốt Versions → Review → Export; feedback Dashboard seek đúng timestamp. Chặn response thống kê/project cũ, dùng chung connection khi mở DB đồng thời và scope stats theo project_id, bao gồm unresolved PARTIAL/IN_PROGRESS và CRITICAL.
+- Kiểm tra attachment/version/selection/path khi xuất; chặn media thiếu hoặc symlink trỏ ngoài dự án. Staging + transaction dọn gói mới khi ghi lỗi, giữ nguyên các lần xuất trước.
+- Bỏ metadata SRC gán cứng 1080p/30fps/H.264 và các clip/AI score mẫu. File không giải mã được có cảnh báo, không dừng cả batch; nhập lại cùng path không tạo bản ghi trùng.
+- Player xử lý duration WebM ban đầu là Infinity bằng metadata đã import và lắng nghe `durationchange`, tránh timeline 0/seek về đầu.
+- Transaction cho lưu review + attachments + annotation; ghi SQLite qua tệp tạm và dọn ảnh mới khi lưu thất bại. Filename media có suffix ULID, không ghi đè ảnh cũ khi tái sử dụng review ID.
 - Tránh ID bình luận trùng khi xóa một bình luận giữa danh sách; xác thực quan hệ project/version và dữ liệu feedback ở backend.
 
 ## [0.1.0] - 2026-10-27

@@ -3,6 +3,7 @@ export interface SourceAsset {
   projectId: string
   originalPath: string
   proxyPath?: string | null
+  thumbnailPath?: string | null
   filename: string
   duration?: number
   width?: number
@@ -25,4 +26,5 @@ export interface ImportSourceDTO {
   codec?: string
   fileSize?: number
   fileHash?: string
+  thumbnailBase64?: string
 }

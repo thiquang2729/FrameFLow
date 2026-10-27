@@ -1,12 +1,14 @@
 import { dialog, ipcMain, shell } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-channels'
+import { SOURCE_EXTENSIONS } from '@shared/media'
 import {
   CreateCommentDTO,
   CreateProjectDTO,
   CreateRevisionPackageDTO,
   CreateVersionDTO,
   ImportSourceDTO,
-  UpdateCommentStatusDTO
+  UpdateCommentStatusDTO,
+  UpdateCommentDTO
 } from '@shared/types'
 import { ProjectService } from '../services/project.service'
 import { VersionService } from '../services/version.service'
@@ -44,7 +46,7 @@ export function registerIpcHandlers(
     const result = await dialog.showOpenDialog({
       properties: ['openFile', 'multiSelections'],
       filters: [
-        { name: 'Media Files', extensions: ['mp4', 'mov', 'mkv', 'jpg', 'jpeg', 'png'] },
+        { name: 'Media Files', extensions: SOURCE_EXTENSIONS },
         { name: 'All Files', extensions: ['*'] }
       ]
     })
@@ -93,6 +95,8 @@ export function registerIpcHandlers(
     return reviewService.createComment(dto)
   })
 
+  ipcMain.handle(IPC_CHANNELS.COMMENT_UPDATE, async (_, dto: UpdateCommentDTO) => reviewService.updateComment(dto))
+
   ipcMain.handle(
     IPC_CHANNELS.COMMENT_UPDATE_STATUS,
     async (_, dto: UpdateCommentStatusDTO & { projectId: string }) => {
@@ -116,13 +120,21 @@ export function registerIpcHandlers(
     return sourceService.importSource(dto)
   })
 
+  ipcMain.handle(IPC_CHANNELS.SOURCE_SCAN_DIRECTORY, async (_, directory: string) => {
+    return sourceService.scanDirectory(directory)
+  })
+
   // --- Package Export ---
+  ipcMain.handle(IPC_CHANNELS.PACKAGE_PREVIEW, async (_, dto: CreateRevisionPackageDTO) => {
+    return exportService.previewPackage(dto)
+  })
   ipcMain.handle(IPC_CHANNELS.PACKAGE_CREATE, async (_, dto: CreateRevisionPackageDTO) => {
     return exportService.createPackage(dto)
   })
 
   ipcMain.handle(IPC_CHANNELS.PACKAGE_OPEN_FOLDER, async (_, folderPath: string) => {
-    await shell.openPath(folderPath)
+    const error = await shell.openPath(folderPath)
+    if (error) throw new Error(error)
     return true
   })
 }

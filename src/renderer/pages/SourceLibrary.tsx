@@ -1,665 +1,160 @@
-import React, { useEffect, useState } from 'react'
-import {
-  Folder,
-  Plus,
-  Upload,
-  Search,
-  SlidersHorizontal,
-  LayoutGrid,
-  List,
-  ChevronDown,
-  X,
-  Play,
-  MoreVertical,
-  Copy,
-  AlertTriangle,
-  Lightbulb,
-  Check
-} from 'lucide-react'
+import React, { useEffect, useRef, useState } from 'react'
+import { Film, Folder, LayoutGrid, List, Search, Upload, X } from 'lucide-react'
+import { Project, SourceAsset } from '@shared/types'
+import { isSourceImage } from '@shared/media'
 import { useProjectStore } from '../stores/project.store'
-import { SourceAsset } from '@shared/types'
+import { localFileUrl, probeSource } from '../lib/source-media'
 
-interface MockClip {
-  id: string
-  name: string
-  duration: string
-  rating: number
-  isRatingHigh: boolean
-  tags: { label: string; color: string }[]
-  meta: string
-  thumbnail: string
-  aiSummary: string
-  quality: {
-    sharpness: number
-    stability: number
-    exposure: number
-    composition: number
-    audio: number
-    editorialValue: number
-  }
-  issue: string
-  bestUse: string
-  aiTags: string[]
+const buttonClass = 'rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium hover:bg-slate-50 disabled:opacity-50'
+const unknown = 'Chưa xác định'
+const pathKey = (value: string) => {
+  const normalized = value.replace(/\\/g, '/')
+  return /Windows/i.test(navigator.userAgent) ? normalized.toLowerCase() : normalized
+}
+const durationLabel = (value?: number) => value !== undefined && Number.isFinite(value)
+  ? `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(Math.floor(value % 60)).padStart(2, '0')}` : unknown
+const sizeLabel = (value = 0) => {
+  if (!value) return '0 B'
+  const unit = Math.min(3, Math.floor(Math.log(value) / Math.log(1024)))
+  return `${(value / 1024 ** unit).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} ${['B', 'KB', 'MB', 'GB'][unit]}`
 }
 
-const sampleClips: MockClip[] = [
-  {
-    id: 'src-1',
-    name: 'SRC_001',
-    duration: '00:12',
-    rating: 9.1,
-    isRatingHigh: true,
-    tags: [
-      { label: 'Ổn định', color: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
-      { label: 'Phỏng vấn', color: 'bg-blue-50 text-blue-600 border-blue-200' },
-      { label: 'Người: Quang', color: 'bg-slate-100 text-slate-600 border-slate-200' }
-    ],
-    meta: '4K • 384,2 MB • 3 thg 3, 2025',
-    thumbnail: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80',
-    aiSummary:
-      'Phỏng vấn trung bình với Quang bên ngoài khuôn viên UTH. Hình ảnh tự nhiên, âm thanh rõ ràng và là một phần chân thực về cuộc sống sinh viên và cộng đồng.',
-    quality: {
-      sharpness: 8.8,
-      stability: 9.4,
-      exposure: 8.6,
-      composition: 9.0,
-      audio: 8.9,
-      editorialValue: 9.2
-    },
-    issue: 'Có một chút nhiễu nền (tiếng người nói chuyện). Nên giảm nhẹ tạp âm khi xử lý hậu kỳ.',
-    bestUse: 'Phù hợp làm phân đoạn giới thiệu nhân vật. Thích hợp cho phần mở đầu hoặc phần giới thiệu câu chuyện.',
-    aiTags: ['Người: Quang', 'Phỏng vấn', 'Ngoài trời', 'Khuôn viên', 'Sinh viên', 'Ánh sáng tự nhiên', 'Đối thoại']
-  },
-  {
-    id: 'src-2',
-    name: 'SRC_002',
-    duration: '00:08',
-    rating: 8.6,
-    isRatingHigh: true,
-    tags: [
-      { label: 'Ổn định', color: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
-      { label: 'B-roll', color: 'bg-blue-50 text-blue-600 border-blue-200' },
-      { label: 'Ngoài trời', color: 'bg-slate-100 text-slate-600 border-slate-200' }
-    ],
-    meta: '4K • 276,1 MB • 3 thg 3, 2025',
-    thumbnail: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=600&q=80',
-    aiSummary: 'Cảnh sinh viên dạo bước trong khuôn viên nhiều bóng cây. Góc máy mượt mà, màu sắc rực rỡ.',
-    quality: {
-      sharpness: 9.0,
-      stability: 9.2,
-      exposure: 8.5,
-      composition: 8.8,
-      audio: 8.0,
-      editorialValue: 8.9
-    },
-    issue: 'Độ tương phản bóng đổ hơi gắt giữa trưa.',
-    bestUse: 'Làm cảnh chuyển nhịp giữa các đoạn phỏng vấn.',
-    aiTags: ['B-roll', 'Khuôn viên', 'Ánh sáng tự nhiên', 'Đi bộ']
-  },
-  {
-    id: 'src-3',
-    name: 'SRC_003',
-    duration: '00:14',
-    rating: 8.9,
-    isRatingHigh: true,
-    tags: [
-      { label: 'Ổn định', color: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
-      { label: 'Điện ảnh', color: 'bg-purple-50 text-purple-600 border-purple-200' },
-      { label: 'Cảnh mở', color: 'bg-blue-50 text-blue-600 border-blue-200' }
-    ],
-    meta: '4K • 512,6 MB • 2 thg 3, 2025',
-    thumbnail: 'https://images.unsplash.com/photo-1541829070764-84a7d30dd3f3?auto=format&fit=crop&w=600&q=80',
-    aiSummary: 'Góc flycam toàn cảnh trường từ trên cao bao quát tòa nhà chính và cảnh quan đô thị.',
-    quality: {
-      sharpness: 9.2,
-      stability: 9.5,
-      exposure: 9.0,
-      composition: 9.3,
-      audio: 7.0,
-      editorialValue: 9.4
-    },
-    issue: 'Không có âm thanh thu trực tiếp.',
-    bestUse: 'Cảnh mở màn hoặc kết thúc video.',
-    aiTags: ['Flycam', 'Toàn cảnh', 'Kiến trúc', 'Cảnh mở']
-  },
-  {
-    id: 'src-4',
-    name: 'SRC_004',
-    duration: '00:32',
-    rating: 7.4,
-    isRatingHigh: false,
-    tags: [
-      { label: 'Phỏng vấn', color: 'bg-blue-50 text-blue-600 border-blue-200' },
-      { label: 'Người: Quang', color: 'bg-slate-100 text-slate-600 border-slate-200' },
-      { label: 'Trong nhà', color: 'bg-slate-100 text-slate-600 border-slate-200' }
-    ],
-    meta: '4K • 1,1 GB • 2 thg 3, 2025',
-    thumbnail: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=600&q=80',
-    aiSummary: 'Phỏng vấn góc cận trong phòng lab.',
-    quality: {
-      sharpness: 8.0,
-      stability: 8.1,
-      exposure: 7.2,
-      composition: 7.5,
-      audio: 8.2,
-      editorialValue: 7.4
-    },
-    issue: 'Ánh sáng phòng lab hơi vàng.',
-    bestUse: 'Cắt đoạn chia sẻ về nghiên cứu kỹ thuật.',
-    aiTags: ['Phòng lab', 'Trong nhà', 'Đối thoại']
-  },
-  {
-    id: 'src-5',
-    name: 'SRC_005',
-    duration: '00:08',
-    rating: 5.2,
-    isRatingHigh: false,
-    tags: [
-      { label: 'Rung', color: 'bg-red-50 text-red-600 border-red-200' },
-      { label: 'B-roll', color: 'bg-blue-50 text-blue-600 border-blue-200' },
-      { label: 'Cháy sáng', color: 'bg-orange-50 text-orange-600 border-orange-200' }
-    ],
-    meta: '4K • 198,4 MB • 2 thg 3, 2025',
-    thumbnail: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=600&q=80',
-    aiSummary: 'Quay pan cờ và banner trước cổng.',
-    quality: {
-      sharpness: 6.0,
-      stability: 5.0,
-      exposure: 5.2,
-      composition: 6.0,
-      audio: 6.0,
-      editorialValue: 5.2
-    },
-    issue: 'Bị rung tay mạnh và cháy sáng phần trời.',
-    bestUse: 'Hạn chế sử dụng nếu có clip thay thế.',
-    aiTags: ['Cổng trường', 'Banner', 'Ngoài trời']
-  },
-  {
-    id: 'src-6',
-    name: 'SRC_006',
-    duration: '00:10',
-    rating: 8.3,
-    isRatingHigh: true,
-    tags: [
-      { label: 'Ổn định', color: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
-      { label: 'Đi bộ', color: 'bg-blue-50 text-blue-600 border-blue-200' },
-      { label: 'Nhóm', color: 'bg-slate-100 text-slate-600 border-slate-200' }
-    ],
-    meta: '4K • 320,5 MB • 2 thg 3, 2025',
-    thumbnail: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=600&q=80',
-    aiSummary: 'Nhóm 3 sinh viên trò chuyện vui vẻ bước qua sân trường.',
-    quality: {
-      sharpness: 8.7,
-      stability: 8.9,
-      exposure: 8.5,
-      composition: 8.8,
-      audio: 7.5,
-      editorialValue: 8.6
-    },
-    issue: 'Gió nhẹ làm micro hơi rè.',
-    bestUse: 'B-roll thể hiện đời sống sinh viên sôi nổi.',
-    aiTags: ['Sinh viên', 'Nhóm', 'Đi bộ', 'Sân trường']
-  }
-]
-
 export const SourceLibrary: React.FC = () => {
-  const { activeProject, refreshStats } = useProjectStore()
-  const [sources, setSources] = useState<SourceAsset[]>([])
-  const [selectedMock, setSelectedMock] = useState<MockClip | null>(sampleClips[0])
-  const [selectedAsset, setSelectedAsset] = useState<SourceAsset | null>(null)
-  const [isImporting, setIsImporting] = useState(false)
-  const [isInspectorOpen, setIsInspectorOpen] = useState(true)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [copiedSummary, setCopiedSummary] = useState(false)
+  const project = useProjectStore((state) => state.activeProject)
+  if (!project) return <div className="flex-1 p-8 text-slate-500">Chọn một dự án để xem thư viện SRC.</div>
+  return <ProjectSources key={project.id} project={project} />
+}
 
-  const loadSources = async () => {
-    if (!activeProject) return
-    const list = await window.api.listSources(activeProject.id)
-    setSources(list)
-    if (list.length > 0 && !selectedAsset) {
-      setSelectedAsset(list[0])
-    }
-  }
+function ProjectSources({ project }: { project: Project }): React.ReactElement {
+  const refreshStats = useProjectStore((state) => state.refreshStats)
+  const [sources, setSources] = useState<SourceAsset[]>([])
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [report, setReport] = useState<string[]>([])
+  const [progress, setProgress] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [search, setSearch] = useState('')
+  const [view, setView] = useState<'grid' | 'list'>('grid')
+  const [sort, setSort] = useState('recent')
+  const [previewError, setPreviewError] = useState('')
+  const lifetime = useRef<AbortController>(new AbortController())
+  const importingRef = useRef(false)
+  const selected = sources.find((asset) => asset.id === selectedId)
 
   useEffect(() => {
-    loadSources()
-  }, [activeProject])
+    const controller = new AbortController()
+    lifetime.current = controller
+    window.api.listSources(project.id).then((list: SourceAsset[]) => {
+      if (controller.signal.aborted) return
+      setSources(list)
+      setSelectedId(list[0]?.id || null)
+    }).catch(() => { if (!controller.signal.aborted) setError('Không thể tải thư viện. Hãy mở lại màn hình SRC.') })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    return () => controller.abort()
+  }, [project.id])
 
-  const handleImportSources = async () => {
-    if (!activeProject) return
-    const files = await window.api.selectMediaFiles()
-    if (!files || files.length === 0) return
+  useEffect(() => setPreviewError(''), [selectedId])
 
-    setIsImporting(true)
-    for (const filePath of files) {
-      const filename = filePath.split(/[\\/]/).pop() || 'clip.mp4'
-
-      const tempVideo = document.createElement('video')
-      tempVideo.src = `file:///${filePath.replace(/\\/g, '/')}`
-      await new Promise((resolve) => {
-        tempVideo.onloadedmetadata = () => resolve(true)
-        tempVideo.onerror = () => resolve(false)
-      })
-
-      await window.api.importSource({
-        projectId: activeProject.id,
-        filePath,
-        filename,
-        duration: tempVideo.duration || 0,
-        width: tempVideo.videoWidth || 1920,
-        height: tempVideo.videoHeight || 1080,
-        fps: 30,
-        codec: 'H.264'
-      })
+  const importSources = async (folder: boolean) => {
+    if (importingRef.current) return
+    importingRef.current = true
+    setImporting(true)
+    setError('')
+    setReport([])
+    const signal = lifetime.current.signal
+    const messages: string[] = []
+    try {
+      let paths: string[]
+      if (folder) {
+        const directory = await window.api.selectDirectory()
+        if (!directory || signal.aborted) return
+        setProgress('Đang quét thư mục...')
+        paths = await window.api.scanSourceDirectory(directory)
+      } else paths = await window.api.selectMediaFiles()
+      if (signal.aborted) return
+      if (!paths.length) { setReport(['Không có tệp media được chọn (video, JPG hoặc PNG).']); return }
+      const knownPaths = new Set(sources.map((asset) => pathKey(asset.originalPath)))
+      const knownIds = new Set(sources.map((asset) => asset.id))
+      let imported = 0
+      let duplicates = 0
+      for (const [index, filePath] of [...new Set(paths)].entries()) {
+        if (signal.aborted) break
+        const filename = filePath.split(/[\\/]/).pop() || filePath
+        setProgress(`${index + 1}/${paths.length} — ${filename}`)
+        if (knownPaths.has(pathKey(filePath))) { duplicates++; continue }
+        try {
+          const result = await probeSource(filePath, signal)
+          if (signal.aborted) break
+          const asset: SourceAsset = await window.api.importSource({ projectId: project.id, filePath, filename, ...result.metadata })
+          if (signal.aborted) break
+          setSources((list) => [asset, ...list.filter((item) => item.id !== asset.id)])
+          setSelectedId((current) => current || asset.id)
+          knownPaths.add(pathKey(asset.originalPath))
+          if (knownIds.has(asset.id)) duplicates++
+          else { imported++; knownIds.add(asset.id) }
+          if (result.warning) messages.push(`${filename}: ${result.warning}`)
+        } catch (err) {
+          if (signal.aborted) break
+          messages.push(`${filename}: Không nhập được tệp. ${err instanceof Error ? err.message : ''}`)
+        }
+      }
+      if (!signal.aborted) {
+        setReport([`Đã nhập ${imported} tệp; bỏ qua ${duplicates} tệp đã có.`, ...messages])
+        await refreshStats()
+      }
+    } catch (err) {
+      if (!signal.aborted) setError(`Không thể nhập tư liệu. ${err instanceof Error ? err.message : ''}`)
+    } finally {
+      importingRef.current = false
+      if (!signal.aborted) { setImporting(false); setProgress('') }
     }
-
-    await loadSources()
-    await refreshStats()
-    setIsImporting(false)
   }
 
-  const handleCopySummary = () => {
-    if (selectedMock?.aiSummary) {
-      navigator.clipboard.writeText(selectedMock.aiSummary)
-      setCopiedSummary(true)
-      setTimeout(() => setCopiedSummary(false), 2000)
-    }
-  }
-
-  if (!activeProject) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#f8fafc]">
-        <Folder className="w-12 h-12 text-slate-400 mb-3" />
-        <h2 className="text-base font-bold text-slate-800">Chưa chọn dự án</h2>
-        <p className="text-xs text-slate-500 mt-1 max-w-sm">
-          Chọn một dự án để xem thư viện clip nguồn SRC.
-        </p>
-      </div>
-    )
-  }
+  const visible = sources.filter((asset) => `${asset.filename} ${asset.originalPath}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()))
+    .sort((a, b) => sort === 'name' ? a.filename.localeCompare(b.filename, 'vi') : sort === 'size' ? (b.fileSize || 0) - (a.fileSize || 0) : b.importedAt.localeCompare(a.importedAt))
 
   return (
-    <div className="flex-1 flex overflow-hidden bg-[#f8fafc] text-slate-800">
-      {/* Main Grid View */}
-      <div className="flex-1 overflow-y-auto p-8 space-y-5">
-        {/* Header */}
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Thư viện SRC</h1>
-            <div className="flex items-center gap-2.5 text-xs text-slate-500 font-medium">
-              <span className="flex items-center gap-1.5">
-                <Folder className="w-3.5 h-3.5 text-slate-400" />
-                <span>{activeProject.name}</span>
-              </span>
-              <span>•</span>
-              <span>{sources.length > 0 ? sources.length : 128} clip</span>
-              <span>•</span>
-              <span>245,6 GB</span>
-              <span>•</span>
-              <span>Cập nhật 3 thg 3, 2025</span>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleImportSources}
-              className="flex items-center gap-2 px-3.5 h-9 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors shadow-2xs"
-            >
-              <Upload className="w-3.5 h-3.5" />
-              <span>Nhập tư liệu</span>
-            </button>
-
-            <div className="flex items-center rounded-xl bg-blue-600 hover:bg-blue-700 shadow-sm text-white transition-colors overflow-hidden">
-              <button
-                type="button"
-                onClick={handleImportSources}
-                disabled={isImporting}
-                className="px-3.5 py-2 text-xs font-semibold flex items-center gap-2 disabled:opacity-50"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>{isImporting ? 'Đang nhập...' : 'Thêm clip nguồn'}</span>
-              </button>
-              <div className="w-[1px] h-4 bg-blue-400/40" />
-              <button type="button" className="px-2 py-2 hover:bg-black/10">
-                <ChevronDown className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
+    <div className="flex-1 flex overflow-hidden bg-[#f8fafc] text-slate-800 min-w-0">
+      <main className="flex-1 overflow-y-auto min-w-0 p-6 space-y-5">
+        <header className="flex flex-wrap items-start justify-between gap-3">
+          <div><h1 className="text-2xl font-bold">Thư viện SRC</h1><p className="text-xs text-slate-500 mt-1">{project.name} · {sources.length} tệp · {sizeLabel(sources.reduce((sum, asset) => sum + (asset.fileSize || 0), 0))}</p></div>
+          <div className="flex gap-2"><button className={buttonClass} disabled={loading || importing} onClick={() => { void importSources(true) }}><Folder size={14} className="inline mr-1" />Nhập thư mục</button><button className={`${buttonClass} bg-blue-600 text-white hover:bg-blue-700`} disabled={loading || importing} onClick={() => { void importSources(false) }}><Upload size={14} className="inline mr-1" />Nhập tư liệu</button></div>
+        </header>
+        {error && <p role="alert" className="text-xs text-red-700 bg-red-50 rounded-xl p-3">{error}</p>}
+        {importing && <p role="status" className="text-xs text-blue-700">Đang nhập: {progress || 'Chờ chọn tệp...'}</p>}
+        {report.length > 0 && <div role="status" className="text-xs bg-blue-50 border border-blue-100 rounded-xl p-3 max-h-40 overflow-y-auto space-y-1">{report.map((message, index) => <p key={index}>{message}</p>)}</div>}
+        <div className="flex flex-wrap gap-3 items-center">
+          <label className="relative flex-1 min-w-40"><Search size={14} className="absolute left-3 top-3 text-slate-400" /><input aria-label="Tìm tư liệu" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm tên tệp hoặc đường dẫn..." className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl text-xs" /></label>
+          <select aria-label="Sắp xếp tư liệu" value={sort} onChange={(event) => setSort(event.target.value)} className="border rounded-xl p-2 text-xs"><option value="recent">Mới nhập</option><option value="name">Tên tệp</option><option value="size">Dung lượng</option></select>
+          <button aria-label="Dạng lưới" aria-pressed={view === 'grid'} className={buttonClass} onClick={() => setView('grid')}><LayoutGrid size={15} /></button><button aria-label="Dạng danh sách" aria-pressed={view === 'list'} className={buttonClass} onClick={() => setView('list')}><List size={15} /></button>
         </div>
-
-        {/* Search & Filter Toolbar */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="relative flex-1 max-w-md">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm clip nguồn..."
-              className="w-full h-9 pl-9 pr-4 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-2xs"
-            />
-          </div>
-
-          <div className="flex items-center gap-2.5">
-            <button
-              type="button"
-              className="flex items-center gap-2 px-3 h-9 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 shadow-2xs transition-colors"
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
-              <span>Bộ lọc</span>
-            </button>
-
-            {/* View Mode Toggle */}
-            <div className="flex items-center bg-white border border-slate-200 rounded-xl p-0.5 shadow-2xs">
-              <button
-                type="button"
-                className="p-1.5 rounded-lg bg-blue-50 text-blue-600 transition-colors"
-                title="Dạng lưới"
-              >
-                <LayoutGrid className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 transition-colors"
-                title="Dạng danh sách"
-              >
-                <List className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* Sort Dropdown */}
-            <button
-              type="button"
-              className="flex items-center gap-2 px-3 h-9 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 shadow-2xs transition-colors"
-            >
-              <span>Sắp xếp: Liên quan</span>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-            </button>
-          </div>
-        </div>
-
-        {/* Filter Pills */}
-        <div className="flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              className="px-3 py-1 bg-blue-50 border border-blue-200 text-blue-600 font-semibold rounded-full shadow-2xs"
-            >
-              Điểm đánh giá ≥ 8
-            </button>
-            <button
-              type="button"
-              className="flex items-center gap-1 px-3 py-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-full shadow-2xs"
-            >
-              <span>Ổn định</span>
-              <ChevronDown className="w-3 h-3 text-slate-400" />
-            </button>
-            <button
-              type="button"
-              className="flex items-center gap-1 px-3 py-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-full shadow-2xs"
-            >
-              <span>B-roll</span>
-              <ChevronDown className="w-3 h-3 text-slate-400" />
-            </button>
-            <button
-              type="button"
-              className="flex items-center gap-1 px-3 py-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-full shadow-2xs"
-            >
-              <span>Ngoài trời</span>
-              <ChevronDown className="w-3 h-3 text-slate-400" />
-            </button>
-            <button
-              type="button"
-              className="flex items-center gap-1 px-3 py-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-full shadow-2xs"
-            >
-              <span>Người: Quang</span>
-              <ChevronDown className="w-3 h-3 text-slate-400" />
-            </button>
-            <button
-              type="button"
-              className="text-xs text-blue-600 hover:text-blue-700 font-medium ml-1"
-            >
-              Xóa tất cả
-            </button>
-          </div>
-          <span className="text-slate-400 text-xs font-medium">128 clip</span>
-        </div>
-
-        {/* Clips Grid (3 columns) */}
-        <div className="grid grid-cols-3 gap-5">
-          {sampleClips.map((clip) => {
-            const isSelected = selectedMock?.id === clip.id
-            return (
-              <div
-                key={clip.id}
-                onClick={() => {
-                  setSelectedMock(clip)
-                  setIsInspectorOpen(true)
-                }}
-                className={`bg-white border rounded-2xl overflow-hidden cursor-pointer transition-all hover:shadow-md ${
-                  isSelected
-                    ? 'border-blue-500 ring-2 ring-blue-500/20 shadow-md'
-                    : 'border-slate-200/90 shadow-2xs'
-                }`}
-              >
-                {/* Thumbnail Container */}
-                <div className="relative aspect-video bg-slate-900 overflow-hidden">
-                  <img
-                    src={clip.thumbnail}
-                    alt={clip.name}
-                    className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
-                  />
-                  {/* Duration Badge */}
-                  <span className="absolute bottom-2 left-2 px-1.5 py-0.5 bg-black/80 backdrop-blur-xs rounded text-[10px] font-mono text-white">
-                    {clip.duration}
-                  </span>
-                  {/* Rating Badge */}
-                  <span
-                    className={`absolute top-2 right-2 px-2 py-0.5 rounded-lg text-xs font-bold text-white shadow-sm ${
-                      clip.rating >= 8
-                        ? 'bg-emerald-600'
-                        : clip.rating >= 6
-                          ? 'bg-amber-600'
-                          : 'bg-red-500'
-                    }`}
-                  >
-                    {clip.rating.toFixed(1)}
-                  </span>
-                </div>
-
-                {/* Card Content */}
-                <div className="p-3.5 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-bold text-sm text-slate-900">{clip.name}</h3>
-                    <button
-                      type="button"
-                      className="p-1 text-slate-400 hover:text-slate-600 rounded transition-colors"
-                    >
-                      <MoreVertical className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
-                  {/* Tags */}
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {clip.tags.map((t, idx) => (
-                      <span
-                        key={idx}
-                        className={`text-[10px] font-medium px-2 py-0.5 rounded-md border ${t.color}`}
-                      >
-                        {t.label}
-                      </span>
-                    ))}
-                  </div>
-
-                  {/* Meta */}
-                  <p className="text-[11px] text-slate-400 pt-0.5">{clip.meta}</p>
-                </div>
+        {loading ? <p role="status" className="text-xs text-slate-500">Đang tải thư viện...</p> : !visible.length ? <div className="p-10 border border-dashed rounded-2xl text-center text-slate-500"><Folder className="mx-auto mb-3" /><p className="text-sm">{sources.length ? 'Không có tư liệu phù hợp tìm kiếm.' : 'Chưa có tư liệu. Nhập tệp hoặc thư mục để bắt đầu.'}</p></div>
+          : <div className={view === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4' : 'space-y-2'}>
+            {visible.map((asset) => <button key={asset.id} aria-label={`Xem tư liệu ${asset.filename}`} aria-pressed={selectedId === asset.id} onClick={() => setSelectedId(asset.id)} className={`text-left bg-white border rounded-xl overflow-hidden ${view === 'list' ? 'w-full flex items-center gap-3 p-2' : ''} ${selectedId === asset.id ? 'border-blue-500 ring-1 ring-blue-200' : 'border-slate-200 hover:border-slate-400'}`}>
+              <div className={`bg-slate-900 flex items-center justify-center overflow-hidden ${view === 'grid' ? 'aspect-video w-full' : 'w-20 h-14 shrink-0 rounded-lg'}`}>
+                {asset.thumbnailPath ? <img loading="lazy" src={localFileUrl(`${project.projectPath}/${asset.thumbnailPath}`)} alt="" className="w-full h-full object-contain" onError={(event) => { event.currentTarget.style.visibility = 'hidden' }} /> : <Film className="text-slate-400" size={24} />}
               </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Right Inspector Panel */}
-      {isInspectorOpen && selectedMock && (
-        <aside className="w-96 border-l border-slate-200 bg-white flex flex-col h-full shrink-0 overflow-y-auto">
-          {/* Header Preview */}
-          <div className="relative aspect-video bg-black shrink-0 group">
-            <img
-              src={selectedMock.thumbnail}
-              alt={selectedMock.name}
-              className="w-full h-full object-cover opacity-90"
-            />
-            {/* Close Button */}
-            <button
-              type="button"
-              onClick={() => setIsInspectorOpen(false)}
-              className="absolute top-3 right-3 w-7 h-7 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-            {/* Center Play */}
-            <button
-              type="button"
-              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/60 backdrop-blur-xs text-white flex items-center justify-center hover:scale-110 hover:bg-blue-600 transition-all"
-            >
-              <Play className="w-4 h-4 fill-current ml-0.5" />
-            </button>
-          </div>
-
-          {/* Inspector Details */}
-          <div className="p-5 space-y-5 flex-1 text-xs">
-            {/* Title & Metadata */}
-            <div>
-              <div className="flex items-center justify-between">
-                <h2 className="text-base font-bold text-slate-900">{selectedMock.name}</h2>
-                <button type="button" className="text-slate-400 hover:text-slate-600">
-                  <MoreVertical className="w-4 h-4" />
-                </button>
-              </div>
-              <p className="text-slate-500 mt-1">{selectedMock.meta}</p>
-              <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                {selectedMock.tags.map((t, idx) => (
-                  <span
-                    key={idx}
-                    className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${t.color}`}
-                  >
-                    {t.label}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            {/* AI Summary */}
-            <div className="space-y-1.5 pt-1">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-900 flex items-center gap-1.5">
-                  <span className="text-blue-600">✨</span> Tóm tắt AI
-                </span>
-                <button
-                  type="button"
-                  onClick={handleCopySummary}
-                  className="text-slate-400 hover:text-slate-600 flex items-center gap-1 transition-colors"
-                  title="Sao chép tóm tắt"
-                >
-                  {copiedSummary ? (
-                    <Check className="w-3.5 h-3.5 text-emerald-600" />
-                  ) : (
-                    <Copy className="w-3.5 h-3.5" />
-                  )}
-                </button>
-              </div>
-              <p className="text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-200/70">
-                {selectedMock.aiSummary}
-              </p>
-            </div>
-
-            {/* Quality Score Breakdown */}
-            <div className="space-y-2.5 pt-1">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-900 flex items-center gap-1.5">
-                  <span className="text-blue-600">🎯</span> Chất lượng
-                </span>
-                <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 font-bold border border-emerald-200 rounded-md">
-                  {selectedMock.rating.toFixed(1)}
-                </span>
-              </div>
-
-              <div className="space-y-2 pt-1 text-[11px]">
-                {[
-                  { label: 'Độ sắc nét', val: selectedMock.quality.sharpness },
-                  { label: 'Ổn định hình ảnh', val: selectedMock.quality.stability },
-                  { label: 'Phơi sáng', val: selectedMock.quality.exposure },
-                  { label: 'Bố cục', val: selectedMock.quality.composition },
-                  { label: 'Âm thanh', val: selectedMock.quality.audio },
-                  { label: 'Giá trị biên tập', val: selectedMock.quality.editorialValue }
-                ].map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between gap-3">
-                    <span className="text-slate-500 w-28 truncate">{item.label}</span>
-                    <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-blue-600 rounded-full"
-                        style={{ width: `${(item.val / 10) * 100}%` }}
-                      />
-                    </div>
-                    <span className="font-mono text-slate-700 w-6 text-right">
-                      {item.val.toFixed(1)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Issues */}
-            <div className="space-y-1.5 pt-1">
-              <div className="flex items-center gap-1.5 font-bold text-amber-700">
-                <AlertTriangle className="w-4 h-4 text-amber-600" />
-                <span>Vấn đề</span>
-              </div>
-              <p className="text-slate-600 bg-amber-50/50 p-3 rounded-xl border border-amber-200/60 leading-relaxed">
-                {selectedMock.issue}
-              </p>
-            </div>
-
-            {/* Best Use */}
-            <div className="space-y-1.5 pt-1">
-              <div className="flex items-center gap-1.5 font-bold text-slate-900">
-                <Lightbulb className="w-4 h-4 text-amber-500" />
-                <span>Cách dùng tốt nhất</span>
-              </div>
-              <p className="text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200/70 leading-relaxed">
-                {selectedMock.bestUse}
-              </p>
-            </div>
-
-            {/* AI Tags */}
-            <div className="space-y-2 pt-1">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-900">Thẻ AI</span>
-                <button
-                  type="button"
-                  className="text-[11px] text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1"
-                >
-                  <Plus className="w-3 h-3" />
-                  <span>Thêm thẻ</span>
-                </button>
-              </div>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {selectedMock.aiTags.map((tag, idx) => (
-                  <span
-                    key={idx}
-                    className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-medium transition-colors cursor-pointer"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-        </aside>
-      )}
+              <div className="p-3 min-w-0 space-y-1"><h2 className="text-xs font-bold truncate">{asset.filename}</h2><p className="text-[11px] text-slate-500">{isSourceImage(asset.filename) ? 'Ảnh' : durationLabel(asset.duration)} · {asset.width && asset.height ? `${asset.width}×${asset.height}` : unknown}</p><p className="text-[11px] text-slate-400">{sizeLabel(asset.fileSize)}</p></div>
+            </button>)}
+          </div>}
+      </main>
+      {selected && <aside className="w-80 shrink-0 border-l bg-white overflow-y-auto p-4 space-y-4">
+        <div className="flex justify-between items-start gap-2"><h2 className="font-bold text-sm break-all">{selected.filename}</h2><button aria-label="Đóng chi tiết tư liệu" className="p-1 text-slate-400" onClick={() => setSelectedId(null)}><X size={16} /></button></div>
+        {isSourceImage(selected.originalPath) ? <img key={selected.id} src={localFileUrl(selected.originalPath)} alt={selected.filename} className="w-full max-h-80 object-contain rounded-xl bg-black" onError={() => setPreviewError('Không đọc được ảnh. Kiểm tra vị trí tệp gốc.')} />
+          : <video key={selected.id} src={localFileUrl(selected.originalPath)} controls preload="metadata" className="w-full max-h-80 rounded-xl bg-black" onError={() => setPreviewError('Không phát được video. Tệp có thể đã bị di chuyển hoặc codec chưa được hỗ trợ.')} />}
+        {previewError && <p role="alert" className="text-xs text-red-600">{previewError}</p>}
+        <dl className="text-xs space-y-3">
+          {[
+            ['Đường dẫn gốc', selected.originalPath], ['Loại', isSourceImage(selected.originalPath) ? 'Ảnh' : 'Video'],
+            ['Thời lượng', isSourceImage(selected.originalPath) ? 'Không áp dụng' : durationLabel(selected.duration)],
+            ['Độ phân giải', selected.width && selected.height ? `${selected.width}×${selected.height}` : unknown],
+            ['FPS', selected.fps ? String(selected.fps) : unknown], ['Codec', selected.codec || unknown],
+            ['Dung lượng', sizeLabel(selected.fileSize)], ['Ngày nhập', new Date(selected.importedAt).toLocaleString('vi-VN')]
+          ].map(([label, value]) => <div key={label}><dt className="text-slate-400 mb-1">{label}</dt><dd className="break-all">{value}</dd></div>)}
+        </dl>
+        <p className="text-[11px] text-slate-400">Metadata cơ bản từ trình giải mã trình duyệt; chưa có phân tích AI. FPS/codec chỉ hiển thị khi có dữ liệu xác thực.</p>
+      </aside>}
     </div>
   )
 }
