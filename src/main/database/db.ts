@@ -162,6 +162,58 @@ export class DatabaseManager {
     if (!this.query<{ name: string }>('PRAGMA table_info(source_assets)').some((column) => column.name === 'thumbnail_path')) {
       this.db.run('ALTER TABLE source_assets ADD COLUMN thumbnail_path TEXT')
     }
+    // Versioned, additive module migration; existing review/source rows are preserved.
+    this.db.run('CREATE TABLE IF NOT EXISTS module_migrations (name TEXT PRIMARY KEY, version INTEGER NOT NULL)')
+    if (!this.get('SELECT name FROM module_migrations WHERE name = ?', ['src-analysis-v1'])) {
+      try {
+        this.db.run(`
+        BEGIN TRANSACTION;
+        CREATE TABLE source_analysis_runs (
+          id TEXT PRIMARY KEY, project_id TEXT NOT NULL, source_asset_id TEXT NOT NULL,
+          state TEXT NOT NULL CHECK(state IN ('RUNNING','COMPLETED','FAILED','CANCELLED','INTERRUPTED')),
+          model TEXT NOT NULL, returned_model TEXT, protocol TEXT NOT NULL,
+          prompt_version TEXT NOT NULL, brief TEXT NOT NULL, file_fingerprint TEXT NOT NULL,
+          start_time REAL NOT NULL, end_time REAL NOT NULL,
+          summary TEXT NOT NULL DEFAULT '', audio_observed INTEGER NOT NULL DEFAULT 0,
+          media_method TEXT NOT NULL DEFAULT 'original', media_note TEXT NOT NULL DEFAULT '',
+          review TEXT NOT NULL DEFAULT 'UNREVIEWED' CHECK(review IN ('UNREVIEWED','ACCEPTED','REJECTED')),
+          user_note TEXT NOT NULL DEFAULT '', error TEXT, created_at TEXT NOT NULL, completed_at TEXT,
+          FOREIGN KEY(project_id) REFERENCES projects(id),
+          FOREIGN KEY(source_asset_id) REFERENCES source_assets(id)
+        );
+        CREATE TABLE source_segments (
+          id TEXT PRIMARY KEY, analysis_run_id TEXT NOT NULL,
+          start_time REAL NOT NULL, end_time REAL NOT NULL, summary TEXT NOT NULL,
+          shot_type TEXT NOT NULL, recommended_use TEXT NOT NULL, scores_json TEXT NOT NULL,
+          CHECK(start_time >= 0 AND end_time > start_time),
+          FOREIGN KEY(analysis_run_id) REFERENCES source_analysis_runs(id)
+        );
+        CREATE TABLE source_issues (
+          id TEXT PRIMARY KEY, analysis_run_id TEXT NOT NULL,
+          start_time REAL NOT NULL, end_time REAL NOT NULL, type TEXT NOT NULL,
+          severity TEXT NOT NULL, description TEXT NOT NULL, evidence TEXT NOT NULL,
+          CHECK(start_time >= 0 AND end_time > start_time),
+          FOREIGN KEY(analysis_run_id) REFERENCES source_analysis_runs(id)
+        );
+        CREATE TABLE source_tags (
+          id TEXT PRIMARY KEY, source_asset_id TEXT NOT NULL, analysis_run_id TEXT,
+          tag TEXT NOT NULL, source TEXT NOT NULL CHECK(source IN ('AI','USER','AGENT')),
+          FOREIGN KEY(source_asset_id) REFERENCES source_assets(id),
+          FOREIGN KEY(analysis_run_id) REFERENCES source_analysis_runs(id)
+        );
+        CREATE INDEX idx_analysis_source ON source_analysis_runs(source_asset_id, created_at);
+        CREATE INDEX idx_analysis_project_state ON source_analysis_runs(project_id, state);
+        CREATE INDEX idx_segments_run ON source_segments(analysis_run_id, start_time);
+        CREATE INDEX idx_issues_run ON source_issues(analysis_run_id, start_time);
+        CREATE INDEX idx_tags_source ON source_tags(source_asset_id, source);
+        INSERT INTO module_migrations (name, version) VALUES ('src-analysis-v1', 1);
+        COMMIT;
+        `)
+      } catch (error) {
+        this.db.run('ROLLBACK')
+        throw error
+      }
+    }
   }
 
   public persist(): void {

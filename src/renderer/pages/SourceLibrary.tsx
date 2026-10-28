@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Film, Folder, LayoutGrid, List, Search, Upload, X } from 'lucide-react'
+import { Film, Folder, LayoutGrid, List, Search, Upload, X, Maximize2 } from 'lucide-react'
 import { Project, SourceAsset } from '@shared/types'
 import { isSourceImage } from '@shared/media'
 import { useProjectStore } from '../stores/project.store'
 import { localFileUrl, probeSource } from '../lib/source-media'
+import { SourceWorkspace } from '../components/source/SourceWorkspace'
 
 const buttonClass = 'rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium hover:bg-slate-50 disabled:opacity-50'
 const unknown = 'Chưa xác định'
@@ -38,9 +39,11 @@ function ProjectSources({ project }: { project: Project }): React.ReactElement {
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [sort, setSort] = useState('recent')
   const [previewError, setPreviewError] = useState('')
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const lifetime = useRef<AbortController>(new AbortController())
   const importingRef = useRef(false)
   const selected = sources.find((asset) => asset.id === selectedId)
+  const workspace = sources.find((asset) => asset.id === workspaceId)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -141,9 +144,15 @@ function ProjectSources({ project }: { project: Project }): React.ReactElement {
       </main>
       {selected && <aside className="w-80 shrink-0 border-l bg-white overflow-y-auto p-4 space-y-4">
         <div className="flex justify-between items-start gap-2"><h2 className="font-bold text-sm break-all">{selected.filename}</h2><button aria-label="Đóng chi tiết tư liệu" className="p-1 text-slate-400" onClick={() => setSelectedId(null)}><X size={16} /></button></div>
-        {isSourceImage(selected.originalPath) ? <img key={selected.id} src={localFileUrl(selected.originalPath)} alt={selected.filename} className="w-full max-h-80 object-contain rounded-xl bg-black" onError={() => setPreviewError('Không đọc được ảnh. Kiểm tra vị trí tệp gốc.')} />
-          : <video key={selected.id} src={localFileUrl(selected.originalPath)} controls preload="metadata" className="w-full max-h-80 rounded-xl bg-black" onError={() => setPreviewError('Không phát được video. Tệp có thể đã bị di chuyển hoặc codec chưa được hỗ trợ.')} />}
+        {isSourceImage(selected.originalPath) ? <img key={`${selected.id}:${selected.originalPath}`} src={localFileUrl(selected.originalPath)} alt={selected.filename} className="w-full max-h-80 object-contain rounded-xl bg-black" onError={() => setPreviewError('Không đọc được ảnh. Kiểm tra vị trí tệp gốc.')} />
+          : <video key={`${selected.id}:${selected.originalPath}`} src={localFileUrl(selected.originalPath)} controls preload="metadata" className="w-full max-h-80 rounded-xl bg-black" onError={() => setPreviewError('Không phát được video. Tệp có thể đã bị di chuyển hoặc codec chưa được hỗ trợ.')} />}
         {previewError && <p role="alert" className="text-xs text-red-600">{previewError}</p>}
+        {previewError && <button type="button" className={buttonClass} onClick={() => { void window.api.sourceAnalysis.relink(project.id, selected.id).then(async (changed) => {
+          if (!changed) return
+          const next: SourceAsset[] = await window.api.listSources(project.id)
+          if (!lifetime.current.signal.aborted) { setSources(next); setPreviewError('') }
+        }).catch((err) => { if (!lifetime.current.signal.aborted) setPreviewError(err instanceof Error ? err.message : 'Không liên kết lại được SRC.') }) }}>Liên kết lại tệp</button>}
+        <button type="button" className={`${buttonClass} w-full flex items-center justify-center gap-2`} onClick={(event) => { event.currentTarget.closest('aside')?.querySelector('video')?.pause(); setWorkspaceId(selected.id) }}><Maximize2 size={14} aria-hidden="true" />{isSourceImage(selected.originalPath) ? 'Mở ảnh' : 'Xem và đánh giá SRC'}</button>
         <dl className="text-xs space-y-3">
           {[
             ['Đường dẫn gốc', selected.originalPath], ['Loại', isSourceImage(selected.originalPath) ? 'Ảnh' : 'Video'],
@@ -153,8 +162,11 @@ function ProjectSources({ project }: { project: Project }): React.ReactElement {
             ['Dung lượng', sizeLabel(selected.fileSize)], ['Ngày nhập', new Date(selected.importedAt).toLocaleString('vi-VN')]
           ].map(([label, value]) => <div key={label}><dt className="text-slate-400 mb-1">{label}</dt><dd className="break-all">{value}</dd></div>)}
         </dl>
-        <p className="text-[11px] text-slate-400">Metadata cơ bản từ trình giải mã trình duyệt; chưa có phân tích AI. FPS/codec chỉ hiển thị khi có dữ liệu xác thực.</p>
-      </aside>}
+       </aside>}
+      {workspace && <SourceWorkspace key={workspace.id} source={workspace} project={project} onClose={() => setWorkspaceId(null)} onMetadata={async () => {
+        const next: SourceAsset[] = await window.api.listSources(project.id)
+        if (!lifetime.current.signal.aborted) setSources(next)
+      }} />}
     </div>
   )
 }

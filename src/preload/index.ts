@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC_CHANNELS } from '../shared/ipc-channels'
 import type { AiStatus, AiTestResult } from '../shared/types/ai'
+import type { AnalysisReview, SourceAnalysisEnvironment, SourceAnalysisOverview, SourceAnalysisRequest, SourceAnalysisRun, SourceMediaInfo } from '../shared/types/source-analysis'
 import {
   CreateCommentDTO,
   CreateProjectDTO,
@@ -12,6 +13,16 @@ import {
 } from '../shared/types'
 
 const api = {
+  sourceAnalysis: {
+    environment: (): Promise<SourceAnalysisEnvironment> => ipcRenderer.invoke('source-analysis:environment'),
+    overview: (projectId: string): Promise<SourceAnalysisOverview[]> => ipcRenderer.invoke('source-analysis:overview', projectId),
+    probe: (projectId: string, sourceId: string): Promise<SourceMediaInfo> => ipcRenderer.invoke('source-analysis:probe', projectId, sourceId),
+    relink: (projectId: string, sourceId: string): Promise<boolean> => ipcRenderer.invoke('source-analysis:relink', projectId, sourceId),
+    list: (projectId: string, sourceId: string): Promise<SourceAnalysisRun[]> => ipcRenderer.invoke('source-analysis:list', projectId, sourceId),
+    start: (request: SourceAnalysisRequest): Promise<{ id: string }> => ipcRenderer.invoke('source-analysis:start', request),
+    cancel: (projectId: string, sourceId: string, runId: string): Promise<void> => ipcRenderer.invoke('source-analysis:cancel', projectId, sourceId, runId),
+    review: (projectId: string, sourceId: string, runId: string, review: AnalysisReview, note: string, tags: string[]): Promise<void> => ipcRenderer.invoke('source-analysis:review', projectId, sourceId, runId, review, note, tags)
+  },
   ai: {
     status: (): Promise<AiStatus> => ipcRenderer.invoke('ai:status'),
     restart: (): Promise<AiStatus> => ipcRenderer.invoke('ai:restart'),

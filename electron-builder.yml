@@ -10,6 +10,10 @@ asarUnpack:
   - '**/*.wasm'
 npmRebuild: false
 extraResources:
+  - from: resources/media
+    to: media
+    filter:
+      - '${os}-${arch}/**/*'
   - from: resources/cli-proxy/${os}-${arch}
     to: cli-proxy
     filter:

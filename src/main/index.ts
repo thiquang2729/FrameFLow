@@ -10,12 +10,16 @@ import { ExportService } from './services/export.service'
 import { registerIpcHandlers } from './ipc/register-ipc'
 import { AiService } from './services/ai.service'
 import { registerAiIpc } from './ipc/register-ai-ipc'
+import { SourceMediaService } from './services/source-media.service'
+import { SourceAnalysisService } from './services/source-analysis.service'
+import { registerSourceAnalysisIpc } from './ipc/register-source-analysis-ipc'
 
 // Completely disable native application menu on Windows to prevent flickering/resizing
 Menu.setApplicationMenu(null)
 
 let mainWindow: BrowserWindow | null = null
 let aiService: AiService | null = null
+let sourceAnalysisService: SourceAnalysisService | null = null
 let quitting = false
 
 // A second app instance must not overwrite the first instance's proxy config.
@@ -88,6 +92,11 @@ app.whenReady().then(() => {
     openExternal: (url) => shell.openExternal(url)
   })
   registerAiIpc(aiService)
+  const media = new SourceMediaService(app.isPackaged
+    ? join(process.resourcesPath, 'media', platformFolder)
+    : join(app.getAppPath(), 'resources', 'media', platformFolder))
+  sourceAnalysisService = new SourceAnalysisService(projectService, aiService, media)
+  registerSourceAnalysisIpc(sourceAnalysisService)
   void aiService.start()
 
   // Register IPC endpoints
@@ -110,7 +119,10 @@ app.on('before-quit', (event) => {
   if (quitting || !aiService) return
   event.preventDefault()
   quitting = true
-  void aiService.stop().finally(() => app.quit())
+  void (async () => {
+    try { await sourceAnalysisService?.stop() }
+    finally { await aiService?.stop() }
+  })().finally(() => app.quit())
 })
 
 app.on('window-all-closed', () => {

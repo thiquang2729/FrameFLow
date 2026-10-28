@@ -302,8 +302,26 @@ export class ReviewService {
   }
 
   public async deleteComment(projectId: string, commentId: string): Promise<boolean> {
+    const project = await this.projectService.getProject(projectId)
+    if (!project) throw new Error('Project not found')
     const db = await this.projectService.getDb(projectId)
-    db.run(`DELETE FROM review_comments WHERE id = ?`, [commentId])
+    const attachments = db.query<{ file_path: string }>(
+      'SELECT file_path FROM review_attachments WHERE review_comment_id = ?',
+      [commentId]
+    )
+    db.transaction(() => {
+      db.run('DELETE FROM annotations WHERE review_comment_id = ?', [commentId])
+      db.run('DELETE FROM review_attachments WHERE review_comment_id = ?', [commentId])
+      db.run('DELETE FROM review_comments WHERE id = ? AND project_id = ?', [commentId, projectId])
+    })
+    for (const att of attachments) {
+      try {
+        const absPath = path.isAbsolute(att.file_path) ? att.file_path : path.join(project.projectPath, att.file_path)
+        if (fs.existsSync(absPath)) {
+          fs.unlinkSync(absPath)
+        }
+      } catch {}
+    }
     return true
   }
 }

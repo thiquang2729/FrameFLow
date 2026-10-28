@@ -156,11 +156,38 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
 
         <div className="h-4 w-px bg-slate-200 shrink-0 hidden sm:block" />
 
-        {/* Stroke / Font Size Slider */}
+        {/* Stroke / Font Size Slider & Presets */}
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">
             {currentTool === 'TEXT' ? 'Cỡ chữ' : 'Nét'}
           </span>
+          {currentTool !== 'TEXT' && (
+            <div className="flex items-center gap-1">
+              {[
+                { width: 2, label: 'Nhỏ', sizeClass: 'w-1.5 h-1.5' },
+                { width: 4, label: 'Vừa', sizeClass: 'w-2 h-2' },
+                { width: 6, label: 'Lớn', sizeClass: 'w-2.5 h-2.5' }
+              ].map((s) => (
+                <button
+                  key={s.width}
+                  type="button"
+                  onClick={() => setStrokeWidth(s.width)}
+                  className={`w-6 h-6 rounded-md flex items-center justify-center border transition-all ${
+                    strokeWidth === s.width
+                      ? 'bg-blue-50 border-blue-500 text-blue-600 shadow-2xs'
+                      : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
+                  }`}
+                  title={s.label}
+                  aria-label={s.label}
+                >
+                  <span
+                    className={`${s.sizeClass} rounded-full`}
+                    style={{ backgroundColor: strokeWidth === s.width ? '#2563eb' : '#64748b' }}
+                  />
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex items-center gap-1.5">
             <input
               aria-label={currentTool === 'TEXT' ? 'Kích thước cỡ chữ' : 'Độ dày nét vẽ'}
@@ -177,7 +204,7 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
                   setStrokeWidth(val)
                 }
               }}
-              className="w-20 sm:w-24 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+              className="w-16 sm:w-20 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
             />
             <span className="text-[11px] font-mono text-slate-500 w-7 text-right select-none">
               {currentTool === 'TEXT' ? fontSize : strokeWidth}px

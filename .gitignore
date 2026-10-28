@@ -8,6 +8,7 @@ dist-electron/
 out/
 release/
 resources/cli-proxy/
+resources/media/
 build/
 *.tsbuildinfo
 
@@ -39,6 +40,8 @@ pnpm-debug.log*
 # OS files
 .DS_Store
 Thumbs.db
+__pycache__/
+*.py[cod]
 
 # IDE files
 .idea/

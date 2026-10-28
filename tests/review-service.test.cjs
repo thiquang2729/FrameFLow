@@ -206,3 +206,24 @@ test('editing rejects cross-project/version access and rolls back the old drawin
   assert.equal(saved.content, comment.content)
   assert.deepEqual(saved.annotations, comment.annotations)
 })
+
+test('deleting a comment removes database records and disk attachments', async (t) => {
+  const { service, dto, db, directory } = await fixture(t)
+  const comment = await service.createComment({ ...dto, frameBase64, annotatedFrameBase64, annotations: [annotation] })
+  assert.equal(comment.attachments.length, 2)
+  for (const att of comment.attachments) {
+    assert.ok(fs.existsSync(path.join(directory, att.filePath)))
+  }
+  assert.equal(db.get('SELECT COUNT(*) AS count FROM review_comments WHERE id = ?', [comment.id]).count, 1)
+  assert.equal(db.get('SELECT COUNT(*) AS count FROM review_attachments WHERE review_comment_id = ?', [comment.id]).count, 2)
+  assert.equal(db.get('SELECT COUNT(*) AS count FROM annotations WHERE review_comment_id = ?', [comment.id]).count, 1)
+
+  await service.deleteComment(dto.projectId, comment.id)
+
+  assert.equal(db.get('SELECT COUNT(*) AS count FROM review_comments WHERE id = ?', [comment.id]).count, 0)
+  assert.equal(db.get('SELECT COUNT(*) AS count FROM review_attachments WHERE review_comment_id = ?', [comment.id]).count, 0)
+  assert.equal(db.get('SELECT COUNT(*) AS count FROM annotations WHERE review_comment_id = ?', [comment.id]).count, 0)
+  for (const att of comment.attachments) {
+    assert.ok(!fs.existsSync(path.join(directory, att.filePath)))
+  }
+})

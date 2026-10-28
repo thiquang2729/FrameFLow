@@ -8,6 +8,7 @@
   "license": "MIT",
   "scripts": {
     "ai:prepare": "node scripts/prepare-ai-proxy.mjs",
+    "media:prepare": "node scripts/prepare-media-tools.mjs",
     "test": "node --test tests/*.test.cjs",
     "test:electron": "node tests/run-electron-smoke.cjs",
     "test:packaged": "node tests/packaged-smoke.cjs",
@@ -18,8 +19,8 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
     "typecheck": "pnpm typecheck:node && pnpm typecheck:web",
     "start": "electron-vite preview",
-    "dev": "pnpm ai:prepare && electron-vite dev",
-    "build": "pnpm ai:prepare && pnpm typecheck && electron-vite build",
+    "dev": "pnpm ai:prepare && pnpm media:prepare && electron-vite dev",
+    "build": "pnpm ai:prepare && pnpm media:prepare && pnpm typecheck && electron-vite build",
     "build:unpack": "pnpm build && electron-builder --dir --publish never",
     "build:win": "pnpm build && electron-builder --win --publish never",
     "build:mac": "pnpm build && electron-builder --mac --publish never",

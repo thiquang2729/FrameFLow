@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Maximize, MessageSquare, Pause, Play, Plus, SkipBack, SkipForward, Pen, Volume2 } from 'lucide-react'
+import { Maximize, MessageSquare, Pause, Play, Plus, SkipBack, SkipForward, Pen, Pencil, Trash2, Volume2 } from 'lucide-react'
 import { Annotation, AnnotationType, CommentCategory, CommentPriority, CommentStatus, EditVersion, Project, ReviewComment } from '@shared/types'
 import { useProjectStore } from '../stores/project.store'
 import { AnnotationCanvas } from '../components/review/AnnotationCanvas'
@@ -76,10 +76,10 @@ function ProjectReview({ project }: { project: Project }): React.ReactElement {
   const version = versions.find((item) => item.id === versionId)
 
   const headerActions = (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1.5">
       <select
         aria-label="Phiên bản đang duyệt"
-        className="rounded-lg border border-slate-200 bg-white p-2 text-xs max-w-xs cursor-pointer hover:border-slate-300 transition"
+        className="h-7.5 px-2.5 py-1 text-xs rounded-md border border-slate-200/90 bg-white font-medium text-slate-700 max-w-xs cursor-pointer hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300 transition shadow-2xs"
         value={versionId}
         onChange={(event) => {
           if (selectVersion(event.target.value)) setVersionId(event.target.value)
@@ -93,10 +93,18 @@ function ProjectReview({ project }: { project: Project }): React.ReactElement {
           </option>
         ))}
       </select>
-      <button className={`${buttonClass} whitespace-nowrap`} onClick={() => setActiveTab('versions')}>
+      <button
+        type="button"
+        className="h-7.5 px-2.5 py-1 text-xs rounded-md border border-slate-200/90 font-medium text-slate-700 bg-white hover:bg-slate-50 hover:text-slate-900 transition shadow-2xs whitespace-nowrap disabled:opacity-40"
+        onClick={() => setActiveTab('versions')}
+      >
         Nhập bản dựng
       </button>
-      <button className={`${buttonClass} whitespace-nowrap`} onClick={() => setActiveTab('export')}>
+      <button
+        type="button"
+        className="h-7.5 px-2.5 py-1 text-xs rounded-md border border-slate-200/90 font-medium text-slate-700 bg-white hover:bg-slate-50 hover:text-slate-900 transition shadow-2xs whitespace-nowrap disabled:opacity-40"
+        onClick={() => setActiveTab('export')}
+      >
         Xuất phản hồi
       </button>
     </div>
@@ -426,6 +434,60 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
     setError('')
   }
 
+  const startEditComment = (comment: ReviewComment) => {
+    if (!leaveDraft()) return
+    const attachment = comment.attachments?.find((item) => item.type === 'FRAME')
+    videoRef.current?.pause()
+    seek(comment.timestamp, true)
+    if (attachment) {
+      const original = /^(?:[A-Za-z]:|\/)/.test(attachment.filePath) ? attachment.filePath : `${project.projectPath}/${attachment.filePath}`
+      setFrame(fileUrl(original))
+    } else {
+      setFrame(null)
+    }
+    setDraftTime(comment.timestamp)
+    setEditingId(comment.id)
+    setSelectedId(comment.id)
+    setContent(comment.content)
+    setCategory(comment.category)
+    setPriority(comment.priority)
+    setHistory([comment.annotations || []])
+    setHistoryIndex(0)
+    baseline.current = signature(comment.annotations || [], comment.content, comment.category, comment.priority)
+    setDrawingMode(false)
+    setError('')
+    setTimeout(() => {
+      textRef.current?.focus()
+    }, 50)
+  }
+
+  const deleteComment = async (comment: ReviewComment) => {
+    if (busy.current || saving || capturing) return
+    if (editingId && editingId !== comment.id && !leaveDraft()) return
+    const confirmMessage = `Bạn có chắc chắn muốn xóa bình luận ${comment.id} (${formatTime(comment.timestamp)}) không?`
+    if (!window.confirm(confirmMessage)) return
+    busy.current = true
+    setSaving(true)
+    setError('')
+    try {
+      await window.api.deleteComment(project.id, comment.id)
+      if (!mounted.current) return
+      setComments((list) => list.filter((item) => item.id !== comment.id))
+      if (selectedId === comment.id) {
+        setSelectedId(null)
+      }
+      if (editingId === comment.id) {
+        cancelDraft()
+      }
+      await refreshStats()
+    } catch {
+      if (mounted.current) setError('Không thể xóa bình luận. Vui lòng thử lại.')
+    } finally {
+      busy.current = false
+      if (mounted.current) setSaving(false)
+    }
+  }
+
   const toggleDrawing = () => {
     if (saving || capturing) return
     if (draftTime !== null) { setDrawingMode((value) => !value); return }
@@ -441,7 +503,8 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
   }
 
   const saveComment = async () => {
-    if (draftTime === null || !frame || (!content.trim() && !annotations.length) || busy.current) return
+    if (draftTime === null || (!content.trim() && !annotations.length) || busy.current) return
+    if (!editingId && !frame) return
     busy.current = true
     setSaving(true)
     setError('')
@@ -455,7 +518,7 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
       }) : await window.api.createComment({
         projectId: project.id, editVersionId: version.id, timestamp: draftTime,
         frameNumber: frameIndex(draftTime), category, priority, content: note,
-        frameBase64: frame, annotations, annotatedFrameBase64: annotatedFrameBase64 || undefined
+        frameBase64: frame || undefined, annotations, annotatedFrameBase64: annotatedFrameBase64 || undefined
       })
       if (!mounted.current) return
       setComments((list) => [...list.filter((item) => item.id !== comment.id), comment].sort((a, b) => a.timestamp - b.timestamp))
@@ -525,6 +588,14 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
       }
       if (event.code === 'Space') { event.preventDefault(); togglePlay() }
       else if (event.key.toLowerCase() === 'c') { event.preventDefault(); void startComment() }
+      else if (event.key.toLowerCase() === 'e' && selected && draftTime === null) {
+        event.preventDefault()
+        startEditComment(selected)
+      }
+      else if (event.key === 'Delete' && selected && draftTime === null) {
+        event.preventDefault()
+        void deleteComment(selected)
+      }
       else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
         event.preventDefault()
         const direction = event.key === 'ArrowLeft' ? -1 : 1
@@ -560,34 +631,64 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
               const attach = comment.attachments?.find((item) => item.type === 'ANNOTATED_FRAME') || comment.attachments?.find((item) => item.type === 'FRAME')
               const thumbUrl = attach ? fileUrl(/^(?:[A-Za-z]:|\/)/.test(attach.filePath) ? attach.filePath : `${project.projectPath}/${attach.filePath}`) : null
               return (
-                <button
-                  key={comment.id}
-                  disabled={capturing || saving}
-                  onClick={() => pickComment(comment)}
-                  className={`w-full text-left p-3 rounded-xl border space-y-2 disabled:opacity-50 transition ${selectedId === comment.id ? 'border-blue-500 bg-blue-50 shadow-sm' : 'border-slate-200 hover:bg-slate-50'}`}
-                >
-                  <div className="flex gap-2.5 items-start">
-                    {thumbUrl ? (
-                      <img src={thumbUrl} alt="" className={`${isVertical ? 'w-10 h-16' : 'w-14 h-10'} rounded-lg object-cover shrink-0 bg-black border border-slate-200`} />
-                    ) : (
-                      <div className={`${isVertical ? 'w-10 h-16' : 'w-14 h-10'} rounded-lg bg-slate-100 shrink-0 flex items-center justify-center text-slate-400 border border-slate-200`}>
-                        <MessageSquare size={16} />
+                <div key={comment.id} className="relative group">
+                  <button
+                    disabled={capturing || saving}
+                    onClick={() => pickComment(comment)}
+                    className={`w-full text-left p-3 rounded-xl border space-y-2 disabled:opacity-50 transition ${selectedId === comment.id ? 'border-blue-500 bg-blue-50 shadow-sm' : 'border-slate-200 hover:bg-slate-50'}`}
+                  >
+                    <div className="flex gap-2.5 items-start">
+                      {thumbUrl ? (
+                        <img src={thumbUrl} alt="" className={`${isVertical ? 'w-10 h-16' : 'w-14 h-10'} rounded-lg object-cover shrink-0 bg-black border border-slate-200`} />
+                      ) : (
+                        <div className={`${isVertical ? 'w-10 h-16' : 'w-14 h-10'} rounded-lg bg-slate-100 shrink-0 flex items-center justify-center text-slate-400 border border-slate-200`}>
+                          <MessageSquare size={16} />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0 pr-12">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="font-mono text-blue-600 font-semibold">{formatTime(comment.timestamp)}</span>
+                          <span className="text-[10px] text-slate-400 font-mono">{comment.id}</span>
+                        </div>
+                        <p className="text-xs break-words line-clamp-2 text-slate-700 mt-0.5">{comment.content}</p>
                       </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="font-mono text-blue-600 font-semibold">{formatTime(comment.timestamp)}</span>
-                        <span className="text-[10px] text-slate-400 font-mono">{comment.id}</span>
-                      </div>
-                      <p className="text-xs break-words line-clamp-2 text-slate-700 mt-0.5">{comment.content}</p>
                     </div>
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100">
+                      <span>{categories[comment.category]}</span>
+                      <span>{priorities[comment.priority]}</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] ${comment.status === 'FIXED' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{statuses[comment.status]}</span>
+                    </div>
+                  </button>
+
+                  <div className="absolute top-2.5 right-2.5 flex items-center gap-1 z-10 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                    <button
+                      type="button"
+                      title="Chỉnh sửa bình luận"
+                      aria-label={`Sửa bình luận ${comment.id}`}
+                      disabled={saving || capturing}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        startEditComment(comment)
+                      }}
+                      className="p-1 rounded-md bg-white hover:bg-blue-50 text-slate-400 hover:text-blue-600 border border-slate-200 shadow-sm transition"
+                    >
+                      <Pencil size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      title="Xóa bình luận"
+                      aria-label={`Xóa bình luận ${comment.id}`}
+                      disabled={saving || capturing}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        void deleteComment(comment)
+                      }}
+                      className="p-1 rounded-md bg-white hover:bg-red-50 text-slate-400 hover:text-red-600 border border-slate-200 shadow-sm transition"
+                    >
+                      <Trash2 size={12} />
+                    </button>
                   </div>
-                  <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100">
-                    <span>{categories[comment.category]}</span>
-                    <span>{priorities[comment.priority]}</span>
-                    <span className={`px-1.5 py-0.5 rounded text-[10px] ${comment.status === 'FIXED' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{statuses[comment.status]}</span>
-                  </div>
-                </button>
+                </div>
               )
             })}
           </div>
@@ -722,7 +823,25 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
         >
           <h2 className="font-bold text-sm">Ghi chú duyệt</h2>
           {draftTime !== null ? <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void saveComment() }}>
-            <p className="font-mono text-xs">{formatTime(draftTime)} · Frame ~{Math.round(draftTime * (version.fps || 30))}</p>
+            <div className="flex items-center justify-between">
+              <p className="font-mono text-xs">
+                {editingId ? `Sửa bình luận ${editingId}` : 'Bình luận mới'} · {formatTime(draftTime)} · Frame ~{Math.round(draftTime * (version.fps || 30))}
+              </p>
+              {editingId && (
+                <button
+                  type="button"
+                  title="Xóa bình luận này"
+                  aria-label="Xóa bình luận đang sửa"
+                  className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded transition"
+                  onClick={() => {
+                    const toDelete = comments.find((c) => c.id === editingId)
+                    if (toDelete) void deleteComment(toDelete)
+                  }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </div>
             <label className="block text-xs space-y-1"><span>Danh mục</span><select className={inputClass} value={category} disabled={saving} onChange={(event) => setCategory(event.target.value as CommentCategory)}>{Object.entries(categories).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
             <label className="block text-xs space-y-1"><span>Mức ưu tiên</span><select className={inputClass} value={priority} disabled={saving} onChange={(event) => setPriority(event.target.value as CommentPriority)}>{Object.entries(priorities).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
             <label className="block text-xs space-y-1"><span>Nội dung phản hồi (có thể để trống nếu đã vẽ)</span><textarea ref={textRef} className={inputClass} rows={4} value={content} disabled={saving} onChange={(event) => setContent(event.target.value)} /></label>
@@ -755,7 +874,16 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
                 </div>
               </div>
             )}
-            <div className="flex gap-2"><button type="button" className={buttonClass} disabled={saving || capturing} onClick={() => { leaveDraft() }}>Hủy</button><button type="submit" disabled={saving || capturing || !frame || (!content.trim() && !annotations.length)} className={`${buttonClass} bg-blue-600 text-white hover:bg-blue-700`}>{saving ? 'Đang lưu...' : editingId ? 'Lưu thay đổi frame' : 'Lưu chú thích frame'}</button></div>
+            <div className="flex gap-2">
+              <button type="button" className={buttonClass} disabled={saving || capturing} onClick={() => { leaveDraft() }}>Hủy</button>
+              <button
+                type="submit"
+                disabled={saving || capturing || (!editingId && !frame) || (!content.trim() && !annotations.length)}
+                className={`${buttonClass} bg-blue-600 text-white hover:bg-blue-700`}
+              >
+                {saving ? 'Đang lưu...' : editingId ? 'Lưu thay đổi frame' : 'Lưu chú thích frame'}
+              </button>
+            </div>
           </form> : <>
             <button className={`${buttonClass} flex items-center gap-2`} disabled={!ready || loading || saving} onClick={() => { void startComment() }}><Plus size={14} />Thêm bình luận (C)</button>
             {selected ? <div className="space-y-4 text-xs">
@@ -813,8 +941,32 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
                   {Object.entries(statuses).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
               </label>
+
+              <div className="pt-2 border-t border-slate-200/80 flex items-center gap-2">
+                <button
+                  type="button"
+                  aria-label="Sửa bình luận đã chọn"
+                  className={`${buttonClass} flex-1 flex items-center justify-center gap-1.5 bg-slate-50 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 text-slate-700 font-medium transition`}
+                  disabled={saving || capturing}
+                  onClick={() => startEditComment(selected)}
+                >
+                  <Pencil size={13} /> Sửa bình luận
+                </button>
+                <button
+                  type="button"
+                  aria-label="Xóa bình luận đã chọn"
+                  className={`${buttonClass} flex-1 flex items-center justify-center gap-1.5 text-red-600 hover:bg-red-50 hover:border-red-200 border-slate-200 transition`}
+                  disabled={saving || capturing}
+                  onClick={() => void deleteComment(selected)}
+                >
+                  <Trash2 size={13} /> Xóa bình luận
+                </button>
+              </div>
+
               <p className="text-slate-400 text-[10px]">{new Date(selected.createdAt).toLocaleString('vi-VN')}</p>
-            </div> : <p className="text-xs text-slate-500">Dừng/step video tới frame cần đánh dấu, chọn công cụ vẽ phía trên khung video hoặc nhấn D. {onFrame.length > 0 ? `Frame này có ${onFrame.length} ghi chú đã lưu.` : ''}</p>}
+            </div> : onFrame.length > 0 ? (
+              <p className="text-xs text-slate-500">Frame này có {onFrame.length} ghi chú đã lưu.</p>
+            ) : null}
           </>}
         </aside>
       </div>

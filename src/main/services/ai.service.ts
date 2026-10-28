@@ -4,6 +4,7 @@ import net from 'node:net'
 import { createHash, randomBytes } from 'node:crypto'
 import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process'
 import type { AiStatus, AiTestResult } from '../../shared/types/ai'
+const VIDEO_MAX_BYTES = 12 * 1024 * 1024
 
 interface AiOptions {
   dataDir: string
@@ -47,6 +48,7 @@ export class AiService {
   private binary: string
   private testController: AbortController | null = null
   private loginTimer: ReturnType<typeof setTimeout> | null = null
+  private videoController: AbortController | null = null
 
   constructor(private options: AiOptions) {
     this.configPath = path.join(options.dataDir, 'runtime.yaml')
@@ -125,7 +127,7 @@ export class AiService {
       // Ephemeral client key, regenerated on every start; never returned via IPC.
       const config = {
         'config-version': 8,
-        server: { host: '127.0.0.1', port, 'max-request-body-bytes': 1048576, discovery: { enabled: false } },
+        server: { host: '127.0.0.1', port, 'max-request-body-bytes': 20 * 1024 * 1024, discovery: { enabled: false } },
         access: { 'api-keys': [this.key] },
         management: { 'allow-remote': false, 'secret-key': '', 'disable-control-panel': true, 'disable-auto-update-panel': true },
         oauth: { 'auth-dir': this.authDir },
@@ -178,9 +180,10 @@ export class AiService {
     }
   }
 
-  private async request(route: string, body?: object, timeout = 15000, signal?: AbortSignal): Promise<any> {
+  private async request(route: string, body?: object, timeout = 15000, signal?: AbortSignal, nativeGemini = false): Promise<any> {
     if (!this.status.endpoint) throw new Error('Proxy chưa chạy.')
-    const response = await fetch(this.status.endpoint + route, {
+    const base = nativeGemini ? this.status.endpoint.replace(/\/v1$/, '/v1beta') : this.status.endpoint
+    const response = await fetch(base + route, {
       method: body ? 'POST' : 'GET', redirect: 'error',
       headers: { Authorization: `Bearer ${this.key}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
       body: body ? JSON.stringify(body) : undefined,
@@ -192,6 +195,9 @@ export class AiService {
         401: 'Proxy từ chối khóa truy cập. Hãy khởi động lại AI.',
         403: 'Tài khoản không có quyền dùng model này. Hãy kiểm tra Antigravity hoặc đăng nhập lại.',
         404: 'Model không còn khả dụng. Hãy tải lại danh sách model.',
+        400: 'Model hoặc tuyến Antigravity từ chối định dạng yêu cầu. Chưa thể xác nhận hỗ trợ video.',
+        413: 'Video vượt giới hạn của proxy hoặc upstream. Hãy chọn đoạn ngắn hơn.',
+        415: 'Tuyến AI không chấp nhận định dạng video này.',
         429: 'Tài khoản đã chạm giới hạn. Hãy chờ rồi thử lại.',
         503: 'Chưa có tài khoản AI khả dụng. Hãy đăng nhập Antigravity.'
       }
@@ -224,6 +230,55 @@ export class AiService {
     if (typeof model !== 'string' || !(await this.listModels()).includes(model)) throw new Error('Hãy chọn model có trong danh sách proxy.')
     fs.writeFileSync(path.join(this.options.dataDir, 'settings.json'), JSON.stringify({ selectedModel: model }), { mode: 0o600 })
     this.status.selectedModel = model
+  }
+
+  async listVideoModelCandidates(): Promise<string[]> {
+    if (this.status.state !== 'ready') return []
+    // Catalog membership is not proof of video capability. Keep this distinction in the UI.
+    const result = await this.request('/models', undefined, 15000, undefined, true)
+    if (!Array.isArray(result.models)) throw new Error('Proxy chưa cung cấp danh sách model theo giao thức Gemini.')
+    return [...new Set<string>(result.models
+      .filter((item: any) => typeof item?.name === 'string')
+      .map((item: any) => item.name.replace(/^models\//, ''))
+      .filter((name: string) => name.length <= 200 && /gemini/i.test(name) && !/image|embedding|tts/i.test(name)))].sort()
+  }
+
+  async generateVideo(model: string, bytes: Buffer, mimeType: string, prompt: string, signal: AbortSignal): Promise<{ text: string; returnedModel: string | null }> {
+    if (this.videoController) throw new Error('Đang có một yêu cầu video khác. Hãy chờ hoặc hủy tác vụ.')
+    if (this.status.state !== 'ready' || !this.getStatus().accounts) throw new Error('Hãy kết nối và đăng nhập Antigravity trước.')
+    if (bytes.length > VIDEO_MAX_BYTES || !bytes.length) throw new Error('Video phải nhỏ hơn hoặc bằng 12 MiB.')
+    if (!['video/mp4', 'video/webm', 'video/quicktime'].includes(mimeType)) throw new Error('Định dạng video chưa được phép gửi.')
+    if (!(await this.listVideoModelCandidates()).includes(model)) throw new Error('Model không có trong danh sách Gemini của proxy.')
+    if (signal.aborted) throw new Error('Đã hủy phân tích.')
+    if (this.videoController) throw new Error('Đang có một yêu cầu video khác.')
+    const controller = new AbortController()
+    this.videoController = controller
+    const abort = () => controller.abort()
+    signal.addEventListener('abort', abort, { once: true })
+    const timer = setTimeout(abort, 180000)
+    try {
+      // v8.0.45 Gemini→Antigravity translation preserves native contents/inlineData.
+      // No Files API, image extraction, OpenAI payload conversion or provider fallback.
+      const response = await this.request(`/models/${encodeURIComponent(model)}:generateContent`, {
+        contents: [{ role: 'user', parts: [{ inlineData: { mimeType, data: bytes.toString('base64') } }, { text: prompt }] }],
+        generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 10000, temperature: 0.1 }
+      }, 180000, controller.signal, true)
+      const candidate = response.candidates?.[0]
+      if (candidate?.finishReason !== 'STOP') throw new Error('Phản hồi video bị chặn, bị cắt hoặc chưa hoàn tất. Không lưu đánh giá một phần.')
+      const parts = candidate.content?.parts
+      if (!Array.isArray(parts)) throw new Error('Tuyến AI không trả kết quả Gemini hợp lệ cho video.')
+      const text = parts.filter((part: any) => typeof part?.text === 'string' && !part.thought).map((part: any) => part.text).join('')
+      if (!text.trim()) throw new Error('AI không trả kết quả đánh giá video.')
+      return { text, returnedModel: typeof response.modelVersion === 'string' ? response.modelVersion.slice(0, 200) : null }
+    } catch (error) {
+      if (controller.signal.aborted) throw new Error(signal.aborted ? 'Đã hủy phân tích.' : 'Phân tích video quá thời gian 180 giây.')
+      if (error instanceof TypeError) throw new Error('Mất kết nối tới CLIProxyAPI khi gửi video.')
+      throw error
+    } finally {
+      clearTimeout(timer)
+      signal.removeEventListener('abort', abort)
+      this.videoController = null
+    }
   }
 
   async testPrompt(model: string, prompt: string): Promise<AiTestResult> {
@@ -336,6 +391,7 @@ export class AiService {
   async stop(): Promise<void> {
     this.stopping = true
     this.cancelTest()
+    this.videoController?.abort()
     const login = this.loginProcess
     this.loginProcess = null
     if (this.loginTimer) clearTimeout(this.loginTimer)
