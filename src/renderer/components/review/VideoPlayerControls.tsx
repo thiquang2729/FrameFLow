@@ -14,6 +14,7 @@ import {
   Pen
 } from 'lucide-react'
 import { ReviewComment } from '@shared/types'
+import { getCategoryTheme } from '../../lib/review-categories'
 
 function formatTime(seconds: number): string {
   const ms = Math.max(0, Math.round((Number.isFinite(seconds) ? seconds : 0) * 1000))
@@ -30,6 +31,7 @@ interface VideoPlayerControlsProps {
   saving: boolean
   capturing: boolean
   comments: ReviewComment[]
+  selectedCommentId?: string
   playbackRate: number
   videoSrc?: string
   drawingMode?: boolean
@@ -52,6 +54,7 @@ export const VideoPlayerControls: React.FC<VideoPlayerControlsProps> = ({
   saving,
   capturing,
   comments,
+  selectedCommentId,
   playbackRate,
   videoSrc,
   drawingMode = false,
@@ -241,14 +244,6 @@ export const VideoPlayerControls: React.FC<VideoPlayerControlsProps> = ({
     }
     return bars
   }, [])
-
-  // Color mapping for comment pins based on status or priority
-  const getMarkerColor = (comment: ReviewComment) => {
-    if (comment.status === 'FIXED') return 'bg-emerald-500'
-    if (comment.priority === 'CRITICAL' || comment.priority === 'HIGH') return 'bg-amber-500'
-    if (comment.category === 'SUBTITLE') return 'bg-purple-500'
-    return 'bg-blue-500'
-  }
 
   return (
     <div className="bg-white border-t border-slate-200 px-4 py-3 space-y-3 shrink-0 select-none">
@@ -502,12 +497,14 @@ export const VideoPlayerControls: React.FC<VideoPlayerControlsProps> = ({
                 {duration > 0 &&
                   comments.map((comment) => {
                     const pos = Math.min(100, Math.max(0, (comment.timestamp / duration) * 100))
+                    const theme = getCategoryTheme(comment.category)
+                    const isSelected = selectedCommentId === comment.id
                     return (
                       <button
                         key={comment.id}
                         type="button"
-                        aria-label={`${formatTime(comment.timestamp)}: ${comment.content}`}
-                        title={`${formatTime(comment.timestamp)}: ${comment.content}`}
+                        aria-label={`${formatTime(comment.timestamp)}: [${theme.label}] ${comment.content}`}
+                        title={`${formatTime(comment.timestamp)}: [${theme.label}] ${comment.content}`}
                         disabled={capturing || saving}
                         onClick={(e) => {
                           e.stopPropagation()
@@ -517,11 +514,15 @@ export const VideoPlayerControls: React.FC<VideoPlayerControlsProps> = ({
                         className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 group z-20 flex flex-col items-center cursor-pointer p-0.5 focus:outline-none"
                       >
                         <div
-                          className={`w-3.5 h-3.5 rounded-full border-2 border-white shadow-xs transition-transform group-hover:scale-125 ${getMarkerColor(
-                            comment
-                          )}`}
+                          className={`w-3.5 h-3.5 rounded-full border-2 border-white shadow-xs transition-transform group-hover:scale-125 ${
+                            theme.dotClass
+                          } ${isSelected ? 'ring-2 ring-blue-500 scale-125 z-30' : ''}`}
+                          style={{ backgroundColor: theme.color }}
                         />
-                        <div className="w-[1.5px] h-1 bg-slate-400 group-hover:bg-blue-600" />
+                        <div
+                          className={`w-[1.5px] h-1 transition-colors ${theme.stemClass}`}
+                          style={{ backgroundColor: theme.color }}
+                        />
                       </button>
                     )
                   })}

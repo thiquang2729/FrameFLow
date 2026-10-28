@@ -12,7 +12,7 @@ const qualityRows: [keyof Pick<SourceScores, 'sharpness' | 'stability' | 'exposu
 ]
 
 export function SourceLibraryInspector({ project, source, onClose, onOpenWorkspace, onRelink, onAnalysisChange }: {
-  project: Project; source: SourceAsset; onClose: () => void; onOpenWorkspace: () => void;
+  project: Project; source: SourceAsset; onClose?: () => void; onOpenWorkspace: () => void;
   onRelink: () => Promise<void>; onAnalysisChange: () => Promise<void>
 }): React.JSX.Element {
   const [runs, setRuns] = useState<SourceAnalysisRun[]>([])
@@ -90,7 +90,7 @@ export function SourceLibraryInspector({ project, source, onClose, onOpenWorkspa
       {image ? <img src={localFileUrl(source.originalPath)} alt={source.filename} onError={() => setPreviewError('Không đọc được ảnh gốc.')} /> :
         <video ref={video} src={localFileUrl(source.originalPath)} poster={source.thumbnailPath ? localFileUrl(`${project.projectPath}/${source.thumbnailPath}`) : undefined} controls preload="metadata" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)} onLoadedMetadata={() => { if (pendingSeek.current !== null && video.current) { video.current.currentTime = pendingSeek.current; pendingSeek.current = null } }} onError={() => setPreviewError('Không phát được video. Kiểm tra tệp gốc hoặc codec.')} />}
       {!image && !playing && !previewError && <button type="button" className="slib-preview-play" aria-label={`Phát SRC ${source.filename}`} onClick={() => { void video.current?.play().catch(() => setPreviewError('Không phát được video. Kiểm tra codec hoặc mở trình xem lớn.')) }}><Play size={23} fill="currentColor" aria-hidden="true" /></button>}
-      <button type="button" className="slib-preview-close" aria-label="Đóng chi tiết tư liệu" onClick={onClose}><X size={16} aria-hidden="true" /></button>
+      {onClose && <button type="button" className="slib-preview-close" aria-label="Đóng chi tiết tư liệu" onClick={onClose}><X size={16} aria-hidden="true" /></button>}
       <button type="button" className="slib-preview-expand" aria-label="Mở trình xem SRC lớn" onClick={openWorkspace}><Maximize2 size={15} aria-hidden="true" /></button>
     </div>
     <div className="slib-inspector-identity"><h2 title={source.filename}>{source.filename}</h2><p>{image ? 'Ảnh' : mediaDuration(source.duration)}<span>·</span>{mediaResolution(source.width, source.height)}<span>·</span>{mediaSize(source.fileSize)}<span>·</span>{new Date(source.importedAt).toLocaleDateString('vi-VN')}</p></div>

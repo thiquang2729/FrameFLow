@@ -219,24 +219,38 @@ export class SourceAnalysisService {
   }
 
   async remove(projectId: string, sourceId: string): Promise<void> {
+    await this.removeMany(projectId, [sourceId])
+  }
+
+  async removeMany(projectId: string, sourceIds: string[]): Promise<number> {
+    if (!Array.isArray(sourceIds) || sourceIds.length === 0) return 0
+    if (sourceIds.length > 500) throw new Error('Tối đa 500 SRC mỗi lần xóa.')
     if (this.reserved) throw new Error('Đang chuẩn bị tác vụ SRC khác. Hãy chờ rồi xóa lại.')
     this.reserved = true
     try {
-      const { db } = await this.context(projectId, sourceId)
+      identifier(projectId)
+      sourceIds.forEach(identifier)
+      if (!await this.projects.getProject(projectId)) throw new Error('Dự án không còn tồn tại.')
+      const db = await this.projects.getDb(projectId)
       const task = this.active
-      if (task?.projectId === projectId && task.sourceAssetId === sourceId) {
+      if (task && task.projectId === projectId && sourceIds.includes(task.sourceAssetId)) {
         task.controller.abort()
         await task.done
       }
-      if (!await this.projects.getProject(projectId)) throw new Error('Dự án không còn tồn tại.')
-      // Remove only owned database records. Never unlink original footage or shared media.
+      let removed = 0
       db.transaction(() => {
-        db.run('DELETE FROM source_tags WHERE source_asset_id = ?', [sourceId])
-        db.run('DELETE FROM source_issues WHERE analysis_run_id IN (SELECT id FROM source_analysis_runs WHERE project_id = ? AND source_asset_id = ?)', [projectId, sourceId])
-        db.run('DELETE FROM source_segments WHERE analysis_run_id IN (SELECT id FROM source_analysis_runs WHERE project_id = ? AND source_asset_id = ?)', [projectId, sourceId])
-        db.run('DELETE FROM source_analysis_runs WHERE project_id = ? AND source_asset_id = ?', [projectId, sourceId])
-        db.run('DELETE FROM source_assets WHERE project_id = ? AND id = ?', [projectId, sourceId])
+        for (const sourceId of sourceIds) {
+          const existing = db.get<{ id: string }>('SELECT id FROM source_assets WHERE project_id = ? AND id = ?', [projectId, sourceId])
+          if (!existing) continue
+          db.run('DELETE FROM source_tags WHERE source_asset_id = ?', [sourceId])
+          db.run('DELETE FROM source_issues WHERE analysis_run_id IN (SELECT id FROM source_analysis_runs WHERE project_id = ? AND source_asset_id = ?)', [projectId, sourceId])
+          db.run('DELETE FROM source_segments WHERE analysis_run_id IN (SELECT id FROM source_analysis_runs WHERE project_id = ? AND source_asset_id = ?)', [projectId, sourceId])
+          db.run('DELETE FROM source_analysis_runs WHERE project_id = ? AND source_asset_id = ?', [projectId, sourceId])
+          db.run('DELETE FROM source_assets WHERE project_id = ? AND id = ?', [projectId, sourceId])
+          removed++
+        }
       })
+      return removed
     } finally { this.reserved = false }
   }
 

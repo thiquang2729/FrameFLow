@@ -8,3 +8,35 @@ html, body, #root {
   margin: 0;
   padding: 0;
 }
+
+/* Ẩn hoàn toàn thanh cuộn (vẫn cho phép cuộn bằng chuột / trackpad) */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+/* Thanh cuộn hiện đại, thanh mảnh cho các vùng cuộn khác trong ứng dụng */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.55);
+}
+

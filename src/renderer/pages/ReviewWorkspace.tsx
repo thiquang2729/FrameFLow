@@ -9,11 +9,7 @@ import { VideoPlayerControls } from '../components/review/VideoPlayerControls'
 import { captureFrame } from '../lib/capture-frame'
 import { localFileUrl as fileUrl } from '../lib/source-media'
 import { registerNavigationGuard } from '../lib/navigation-guard'
-
-const categories: Record<CommentCategory, string> = {
-  SUBTITLE: 'Phụ đề', PACING: 'Nhịp dựng', AUDIO: 'Âm thanh', COLOR: 'Màu sắc',
-  CUT: 'Nhịp cắt', EFFECT: 'Hiệu ứng', GRAPHICS: 'Đồ họa', GENERAL: 'Chung'
-}
+import { CATEGORY_THEMES, getCategoryTheme, categoryLabels as categories } from '../lib/review-categories'
 const priorities: Record<CommentPriority, string> = {
   LOW: 'Thấp', MEDIUM: 'Trung bình', HIGH: 'Cao', CRITICAL: 'Khẩn cấp'
 }
@@ -285,6 +281,9 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
   const changeAnnotations = (next: Annotation[]) => {
     setHistory((items) => [...items.slice(0, historyIndex + 1), next])
     setHistoryIndex(historyIndex + 1)
+    setTimeout(() => {
+      textRef.current?.focus()
+    }, 50)
   }
   const selected = comments.find((item) => item.id === selectedId)
   const visibleComments = comments.filter((item) => filter === 'ALL' || item.status === filter)
@@ -568,35 +567,59 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
       const target = event.target as HTMLElement | null
       const isTextInput = target?.closest('input:not([type="range"]):not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]')
       const isSelect = target?.closest('select')
+
+      // Ctrl+Enter: Save comment when in draft mode
       if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && draftTime !== null) {
         event.preventDefault()
         void saveComment()
         return
       }
+
+      // Undo/Redo drawing
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z' && draftTime !== null && !isTextInput && !saving) {
         event.preventDefault()
         setHistoryIndex((index) => event.shiftKey ? Math.min(history.length - 1, index + 1) : Math.max(0, index - 1))
         return
       }
-      if (!isTextInput && !event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === 'd') { event.preventDefault(); toggleDrawing(); return }
-      if (isTextInput || isSelect || event.ctrlKey || event.metaKey || event.altKey) return
-      if (event.key === 'Escape') { leaveDraft(); return }
-      if (draftTime !== null) {
-        const choice: Record<string, CommentPriority> = { '1': 'LOW', '2': 'MEDIUM', '3': 'HIGH' }
-        if (choice[event.key]) setPriority(choice[event.key])
-        if (choice[event.key]) return
+
+      // Toggle drawing with D (only when NOT typing in an input)
+      if (!isTextInput && !event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === 'd') {
+        event.preventDefault()
+        toggleDrawing()
+        return
       }
-      if (event.code === 'Space') { event.preventDefault(); togglePlay() }
-      else if (event.key.toLowerCase() === 'c') { event.preventDefault(); void startComment() }
-      else if (event.key.toLowerCase() === 'e' && selected && draftTime === null) {
+
+      // If user is inside an input or select, or holding modifiers, do not intercept any other keys!
+      if (isTextInput || isSelect || event.ctrlKey || event.metaKey || event.altKey) return
+
+      // Escape: leave draft
+      if (event.key === 'Escape') {
+        leaveDraft()
+        return
+      }
+
+      // When in draft mode: do NOT intercept playback/seek shortcuts; focus textarea if typing
+      if (draftTime !== null) {
+        if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+          textRef.current?.focus()
+        }
+        return
+      }
+
+      // Hotkeys only available when NOT drafting
+      if (event.code === 'Space') {
+        event.preventDefault()
+        togglePlay()
+      } else if (event.key.toLowerCase() === 'c') {
+        event.preventDefault()
+        void startComment()
+      } else if (event.key.toLowerCase() === 'e' && selected) {
         event.preventDefault()
         startEditComment(selected)
-      }
-      else if (event.key === 'Delete' && selected && draftTime === null) {
+      } else if (event.key.toLowerCase() === 'delete' && selected) {
         event.preventDefault()
         void deleteComment(selected)
-      }
-      else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
         event.preventDefault()
         const direction = event.key === 'ArrowLeft' ? -1 : 1
         seek((videoRef.current?.currentTime || 0) + direction * (event.shiftKey ? 5 : 1 / (version.fps || 30)))
@@ -615,7 +638,7 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
   return (
     <>
       {error && <p role="alert" className="p-3 text-xs text-red-700 bg-red-50">{error}</p>}
-      <div className="flex-1 flex min-h-0 overflow-x-auto">
+      <div className="flex-1 flex min-h-0 overflow-x-auto no-scrollbar">
         <aside
           style={{ width: `${leftWidth}px` }}
           className="shrink-0 border-r border-slate-200 bg-white flex flex-col relative"
@@ -625,7 +648,7 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
               <option value="ALL">Tất cả trạng thái</option>{Object.entries(statuses).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
           </div>
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          <div className="flex-1 overflow-y-auto no-scrollbar p-3 space-y-2">
             {loading ? <p role="status" className="text-xs text-slate-500">Đang tải bình luận...</p> : !visibleComments.length && <p className="text-xs text-slate-500">Chưa có bình luận{filter === 'ALL' ? '. Nhấn C để thêm.' : ' phù hợp bộ lọc.'}</p>}
             {visibleComments.map((comment) => {
               const attach = comment.attachments?.find((item) => item.type === 'ANNOTATED_FRAME') || comment.attachments?.find((item) => item.type === 'FRAME')
@@ -654,7 +677,17 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
                       </div>
                     </div>
                     <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100">
-                      <span>{categories[comment.category]}</span>
+                      {(() => {
+                        const theme = getCategoryTheme(comment.category)
+                        return (
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-medium text-[10px] border shadow-2xs ${theme.badgeClass}`}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${theme.dotClass}`} />
+                            {theme.label}
+                          </span>
+                        )
+                      })()}
                       <span>{priorities[comment.priority]}</span>
                       <span className={`px-1.5 py-0.5 rounded text-[10px] ${comment.status === 'FIXED' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{statuses[comment.status]}</span>
                     </div>
@@ -778,6 +811,7 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
             saving={saving}
             capturing={capturing}
             comments={comments}
+            selectedCommentId={selectedId || undefined}
             playbackRate={playbackRate}
             videoSrc={fileUrl(version.videoPath)}
             drawingMode={drawingMode}
@@ -819,7 +853,7 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
         </div>
         <aside
           style={{ width: `${rightWidth}px` }}
-          className="shrink-0 overflow-y-auto border-l border-slate-200 bg-white p-4 space-y-4"
+          className="shrink-0 overflow-y-auto no-scrollbar border-l border-slate-200 bg-white p-4 space-y-4"
         >
           <h2 className="font-bold text-sm">Ghi chú duyệt</h2>
           {draftTime !== null ? <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void saveComment() }}>
@@ -842,9 +876,48 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
                 </button>
               )}
             </div>
-            <label className="block text-xs space-y-1"><span>Danh mục</span><select className={inputClass} value={category} disabled={saving} onChange={(event) => setCategory(event.target.value as CommentCategory)}>{Object.entries(categories).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-medium text-slate-700">Danh mục</span>
+                {(() => {
+                  const theme = getCategoryTheme(category)
+                  return (
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold border shadow-2xs ${theme.badgeClass}`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${theme.dotClass}`} />
+                      {theme.label}
+                    </span>
+                  )
+                })()}
+              </div>
+              <select
+                aria-label="Danh mục bình luận"
+                className={inputClass}
+                value={category}
+                disabled={saving}
+                onChange={(event) => setCategory(event.target.value as CommentCategory)}
+              >
+                {Object.entries(CATEGORY_THEMES).map(([value, theme]) => (
+                  <option key={value} value={value} style={{ color: theme.textColor }}>
+                    ● {theme.label}
+                  </option>
+                ))}
+              </select>
+            </div>
             <label className="block text-xs space-y-1"><span>Mức ưu tiên</span><select className={inputClass} value={priority} disabled={saving} onChange={(event) => setPriority(event.target.value as CommentPriority)}>{Object.entries(priorities).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-            <label className="block text-xs space-y-1"><span>Nội dung phản hồi (có thể để trống nếu đã vẽ)</span><textarea ref={textRef} className={inputClass} rows={4} value={content} disabled={saving} onChange={(event) => setContent(event.target.value)} /></label>
+            <label className="block text-xs space-y-1">
+              <span className="font-medium text-slate-700">Nội dung phản hồi (có thể để trống nếu đã vẽ)</span>
+              <textarea
+                ref={textRef}
+                className={`${inputClass} select-text no-scrollbar`}
+                rows={4}
+                value={content}
+                disabled={saving}
+                placeholder="Nhập ghi chú phản hồi..."
+                onChange={(event) => setContent(event.target.value)}
+              />
+            </label>
             {capturing && <p role="status" className="text-xs text-slate-500">Đang chụp frame...</p>}
             {frame && (
               <div className="space-y-2">
@@ -893,7 +966,20 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
               </div>
               <div>
                 <span className="text-slate-500 block text-[11px]">Danh mục & Mức ưu tiên</span>
-                <p className="font-medium">{categories[selected.category]} · {priorities[selected.priority]}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  {(() => {
+                    const theme = getCategoryTheme(selected.category)
+                    return (
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold border shadow-2xs ${theme.badgeClass}`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${theme.dotClass}`} />
+                        {theme.label}
+                      </span>
+                    )
+                  })()}
+                  <span className="text-xs text-slate-600 font-medium">· {priorities[selected.priority]}</span>
+                </div>
               </div>
               <div>
                 <span className="text-slate-500 block text-[11px]">Nội dung phản hồi</span>
