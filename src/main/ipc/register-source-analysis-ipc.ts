@@ -14,6 +14,7 @@ export function registerSourceAnalysisIpc(service: SourceAnalysisService): void 
   }
   handle('source-analysis:environment', () => service.environment())
   handle('source-analysis:overview', (projectId: string) => service.overview(projectId))
+  handle('source-analysis:remove', (projectId: string, sourceId: string) => service.remove(projectId, sourceId))
   handle('source-analysis:probe', (projectId: string, sourceId: string) => service.probe(projectId, sourceId))
   handle('source-analysis:relink', async (projectId: string, sourceId: string) => {
     await service.list(projectId, sourceId)

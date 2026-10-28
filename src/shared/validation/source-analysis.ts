@@ -23,15 +23,15 @@ function range(value: RecordValue, duration: number, offset: number): { startTim
   return { startTime: offset + Math.min(start, duration), endTime: offset + Math.min(end, duration) }
 }
 
-export function validateSourceAnalysis(input: unknown, duration: number, offset: number, hasAudio: boolean): {
+export function validateSourceAnalysis(input: unknown, duration: number, offset: number): {
   summary: string; audioObserved: boolean; segments: Omit<SourceAnalysisSegment, 'id'>[];
   issues: Omit<SourceAnalysisIssue, 'id'>[]; tags: string[]
 } {
   const root = record(input)
   // This declaration is not independent evidence of upstream video support.
   if (root.videoObserved !== true) throw new Error('Model không xác nhận quan sát được video. Không tạo đánh giá từ ảnh hoặc văn bản thay thế.')
-  if (typeof root.audioObserved !== 'boolean') throw new Error('AI chưa khai báo phạm vi quan sát âm thanh.')
-  const audioObserved = hasAudio && root.audioObserved
+  // Audio is out of scope even if the model ignores the visual-only instruction.
+  const audioObserved = false
   if (!Array.isArray(root.segments) || !root.segments.length || root.segments.length > 60 || !Array.isArray(root.issues) || root.issues.length > 100) {
     throw new Error('Số lượng segment hoặc vấn đề AI không hợp lệ.')
   }
@@ -41,7 +41,7 @@ export function validateSourceAnalysis(input: unknown, duration: number, offset:
     const scores: SourceScores = {
       technical: score(raw.technical), editorial: score(raw.editorial), sharpness: score(raw.sharpness),
       stability: score(raw.stability), exposure: score(raw.exposure), composition: score(raw.composition),
-      audio: audioObserved ? score(raw.audio) : null, rationale: text(raw.rationale)
+      audio: null, rationale: text(raw.rationale)
     }
     return { ...range(row, duration, offset), summary: text(row.summary), shotType: text(row.shotType, 120), recommendedUse: text(row.recommendedUse, 500), scores }
   }).sort((a, b) => a.startTime - b.startTime)
@@ -50,10 +50,9 @@ export function validateSourceAnalysis(input: unknown, duration: number, offset:
   }
   const types: SourceAnalysisIssue['type'][] = ['SHAKE', 'BLUR', 'EXPOSURE', 'COMPOSITION', 'AUDIO', 'OTHER']
   const severities: SourceAnalysisIssue['severity'][] = ['LOW', 'MEDIUM', 'HIGH']
-  const issues = root.issues.map((entry) => {
+  const issues = root.issues.filter((entry) => record(entry).type !== 'AUDIO').map((entry) => {
     const row = record(entry)
     if (!types.includes(row.type as SourceAnalysisIssue['type']) || !severities.includes(row.severity as SourceAnalysisIssue['severity'])) throw new Error('Loại hoặc mức độ vấn đề AI không hợp lệ.')
-    if (row.type === 'AUDIO' && !audioObserved) throw new Error('AI nhận xét âm thanh khi chưa quan sát được âm thanh.')
     return { ...range(row, duration, offset), type: row.type as SourceAnalysisIssue['type'], severity: row.severity as SourceAnalysisIssue['severity'], description: text(row.description), evidence: text(row.evidence) }
   })
   if (!Array.isArray(root.tags) || root.tags.length > 30) throw new Error('Danh sách tag AI không hợp lệ.')

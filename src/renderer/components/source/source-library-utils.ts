@@ -29,5 +29,5 @@ export const tagTone = (tag: string): string => {
 }
 
 export const issueLabels: Record<string, string> = {
-  SHAKE: 'Rung hình', BLUR: 'Thiếu nét', EXPOSURE: 'Phơi sáng', COMPOSITION: 'Bố cục', AUDIO: 'Âm thanh', OTHER: 'Khác'
+  SHAKE: 'Rung hình', BLUR: 'Thiếu nét', EXPOSURE: 'Phơi sáng', COMPOSITION: 'Bố cục', OTHER: 'Khác'
 }

@@ -7,8 +7,8 @@ import { localFileUrl } from '../../lib/source-media'
 import { sourceTime } from './SourceAnalysisPanel'
 import { issueLabels, mediaDuration, mediaResolution, mediaSize, scoreTone, tagTone } from './source-library-utils'
 
-const qualityRows: [keyof Pick<SourceScores, 'sharpness' | 'stability' | 'exposure' | 'composition' | 'audio' | 'editorial'>, string][] = [
-  ['sharpness', 'Độ sắc nét'], ['stability', 'Ổn định hình ảnh'], ['exposure', 'Phơi sáng'], ['composition', 'Bố cục'], ['audio', 'Âm thanh'], ['editorial', 'Giá trị biên tập']
+const qualityRows: [keyof Pick<SourceScores, 'sharpness' | 'stability' | 'exposure' | 'composition' | 'editorial'>, string][] = [
+  ['sharpness', 'Độ sắc nét'], ['stability', 'Ổn định hình ảnh'], ['exposure', 'Phơi sáng'], ['composition', 'Bố cục'], ['editorial', 'Giá trị biên tập']
 ]
 
 export function SourceLibraryInspector({ project, source, onClose, onOpenWorkspace, onRelink, onAnalysisChange }: {
@@ -98,7 +98,7 @@ export function SourceLibraryInspector({ project, source, onClose, onOpenWorkspa
     {previewError && <div className="slib-notice slib-notice--error" role="alert"><p>{previewError}</p><button type="button" className="slib-text-button" onClick={() => { void onRelink().catch((err) => setError(String(err))) }}>Liên kết lại tệp</button></div>}
     {error && <p role="alert" className="slib-notice slib-notice--error">{error}</p>}
     {notice && <p role="status" className="slib-notice">{notice}</p>}
-    {run?.stale && <p className="slib-notice slib-notice--warning">{run.fileChanged ? 'File gốc đã thay đổi hoặc không còn truy cập được.' : 'Brief đã thay đổi.'} Đánh giá cần được cập nhật.</p>}
+    {run?.stale && <p className="slib-notice slib-notice--warning">{run.fileChanged ? 'File gốc đã thay đổi hoặc không còn truy cập được.' : run.criteriaChanged ? 'Tiêu chí đã đổi: bỏ âm thanh và không trừ điểm do xoay 90°.' : 'Brief đã thay đổi.'} Cần phân tích lại để cập nhật điểm.</p>}
     {run?.review === 'REJECTED' && <p className="slib-notice slib-notice--warning">Bạn đã bác bỏ kết quả này. Điểm không được dùng để lọc clip.</p>}
 
     {!image && <>

@@ -16,6 +16,7 @@ const api = {
   sourceAnalysis: {
     environment: (): Promise<SourceAnalysisEnvironment> => ipcRenderer.invoke('source-analysis:environment'),
     overview: (projectId: string): Promise<SourceAnalysisOverview[]> => ipcRenderer.invoke('source-analysis:overview', projectId),
+    remove: (projectId: string, sourceId: string): Promise<void> => ipcRenderer.invoke('source-analysis:remove', projectId, sourceId),
     probe: (projectId: string, sourceId: string): Promise<SourceMediaInfo> => ipcRenderer.invoke('source-analysis:probe', projectId, sourceId),
     relink: (projectId: string, sourceId: string): Promise<boolean> => ipcRenderer.invoke('source-analysis:relink', projectId, sourceId),
     list: (projectId: string, sourceId: string): Promise<SourceAnalysisRun[]> => ipcRenderer.invoke('source-analysis:list', projectId, sourceId),

@@ -86,6 +86,8 @@
 .slib-asset-menu > div { position: absolute; right: 0; top: 27px; z-index: 4; width: 170px; padding: 5px; border: 1px solid #dce4f0; border-radius: 6px; background: #fff; box-shadow: 0 5px 15px rgb(25 47 79 / 12%); }
 .slib-asset-menu > div > button { display: block; width: 100%; padding: 8px; border: 0; border-radius: 3px; background: none; color: var(--slib-ink); text-align: left; font-size: 11px; cursor: pointer; }
 .slib-asset-menu > div > button:hover { background: #edf4ff; }
+.slib-asset-menu > div > .slib-delete-action { display: flex; align-items: center; gap: 7px; margin-top: 4px; border-top: 1px solid var(--slib-line); border-radius: 0 0 3px 3px; color: #a63749; }
+.slib-asset-menu > div > .slib-delete-action:hover:not(:disabled) { background: #fff0f2; }
 .slib-tags { display: flex; flex-wrap: wrap; gap: 5px; }
 .slib-tags > :is(span, button) { display: inline-flex; align-items: center; min-width: 0; max-width: 100%; padding: 2px 7px; border: 0; border-radius: 5px; background: #edf0f7; color: #43536e; font: inherit; font-size: 10px; line-height: 1.7; overflow-wrap: anywhere; }
 .slib-tags > [data-tone='good'] { color: #2a643c; background: #dcf3e1; }

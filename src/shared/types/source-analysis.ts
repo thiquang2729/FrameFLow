@@ -55,6 +55,7 @@ export interface SourceAnalysisRun {
   stale: boolean
   fileChanged: boolean
   briefChanged: boolean
+  criteriaChanged: boolean
   segments: SourceAnalysisSegment[]
   issues: SourceAnalysisIssue[]
   tags: string[]

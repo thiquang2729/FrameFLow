@@ -82,10 +82,10 @@ export class SourceAnalysisService {
       protocol: row.protocol, promptVersion: row.prompt_version, createdAt: row.created_at, completedAt: row.completed_at,
       startTime: row.start_time, endTime: row.end_time, summary: row.summary, audioObserved: Boolean(row.audio_observed),
       mediaMethod: row.media_method, mediaNote: row.media_note, review: row.review, userNote: row.user_note,
-      brief: row.brief, error: row.error, stale: fingerprint !== row.file_fingerprint || brief !== row.brief,
-      fileChanged: fingerprint !== row.file_fingerprint, briefChanged: brief !== row.brief,
+      brief: row.brief, error: row.error, stale: fingerprint !== row.file_fingerprint || brief !== row.brief || row.prompt_version !== VIDEO_PROMPT_VERSION,
+      fileChanged: fingerprint !== row.file_fingerprint, briefChanged: brief !== row.brief, criteriaChanged: row.prompt_version !== VIDEO_PROMPT_VERSION,
       segments: db.query<Row>('SELECT * FROM source_segments WHERE analysis_run_id = ? ORDER BY start_time', [row.id]).map((segment) => ({ id: segment.id, startTime: segment.start_time, endTime: segment.end_time, summary: segment.summary, shotType: segment.shot_type, recommendedUse: segment.recommended_use, scores: JSON.parse(segment.scores_json) })),
-      issues: db.query<Row>('SELECT * FROM source_issues WHERE analysis_run_id = ? ORDER BY start_time', [row.id]).map((issue) => ({ id: issue.id, startTime: issue.start_time, endTime: issue.end_time, type: issue.type, severity: issue.severity, description: issue.description, evidence: issue.evidence })),
+      issues: db.query<Row>("SELECT * FROM source_issues WHERE analysis_run_id = ? AND type <> 'AUDIO' ORDER BY start_time", [row.id]).map((issue) => ({ id: issue.id, startTime: issue.start_time, endTime: issue.end_time, type: issue.type, severity: issue.severity, description: issue.description, evidence: issue.evidence })),
       tags: db.query<{ tag: string }>("SELECT tag FROM source_tags WHERE analysis_run_id = ? AND source = 'AI' ORDER BY tag", [row.id]).map((tag) => tag.tag), userTags
     }))
   }
@@ -112,7 +112,7 @@ export class SourceAnalysisService {
     for (const row of rows) {
       let stale = false
       if (row.id) {
-        try { stale = await this.media.fingerprint(row.original_path) !== row.file_fingerprint || row.brief !== this.brief(project) }
+        try { stale = await this.media.fingerprint(row.original_path) !== row.file_fingerprint || row.brief !== this.brief(project) || row.prompt_version !== VIDEO_PROMPT_VERSION }
         catch { stale = true }
       }
       const segments = row.id ? db.query<Row>('SELECT start_time, end_time, shot_type, recommended_use, scores_json FROM source_segments WHERE analysis_run_id = ? ORDER BY start_time LIMIT 60', [row.id]) : []
@@ -124,7 +124,7 @@ export class SourceAnalysisService {
         startTime: first?.start_time ?? null, endTime: first?.end_time ?? null, tags: [...new Set(tags)],
         shotTypes: [...new Set<string>(segments.map((item) => item.shot_type).filter(Boolean))],
         recommendedUses: [...new Set<string>(segments.map((item) => item.recommended_use).filter(Boolean))],
-        issueTypes: row.id ? db.query<{ type: string }>('SELECT DISTINCT type FROM source_issues WHERE analysis_run_id = ?', [row.id]).map((issue) => issue.type) : [], stale, rejected: row.review === 'REJECTED' })
+        issueTypes: row.id ? db.query<{ type: string }>("SELECT DISTINCT type FROM source_issues WHERE analysis_run_id = ? AND type <> 'AUDIO'", [row.id]).map((issue) => issue.type) : [], stale, rejected: row.review === 'REJECTED' })
     }
     return result
   }
@@ -177,11 +177,11 @@ export class SourceAnalysisService {
       signal.throwIfAborted()
       if (await this.media.fingerprint(file) !== fingerprint) throw new Error('File SRC đã thay đổi khi chuẩn bị video.')
       db.run('UPDATE source_analysis_runs SET media_method = ?, media_note = ? WHERE id = ?', [media.method, media.note, id])
-      const response = await this.ai.generateVideo(request.model, media.bytes, media.mimeType, sourceVideoPrompt(media.duration, brief, media.note, info.hasAudio), signal)
+      const response = await this.ai.generateVideo(request.model, media.bytes, media.mimeType, sourceVideoPrompt(media.duration, brief, media.note), signal)
       signal.throwIfAborted()
       let json: unknown
       try { json = JSON.parse(response.text) } catch { throw new Error('AI không trả JSON hợp lệ. Không lưu kết quả chưa kiểm tra.') }
-      const result = validateSourceAnalysis(json, media.duration, request.startTime, info.hasAudio)
+      const result = validateSourceAnalysis(json, media.duration, request.startTime)
       if (await this.media.fingerprint(file) !== fingerprint) throw new Error('File SRC đã thay đổi trong khi chờ AI. Kết quả không được công bố.')
       // Verify the project/source still exists after asynchronous IO.
       if (!await this.projects.getProject(request.projectId) || !db.get('SELECT id FROM source_assets WHERE project_id = ? AND id = ?', [request.projectId, request.sourceAssetId])) throw new Error('Dự án hoặc SRC không còn tồn tại.')
@@ -216,6 +216,28 @@ export class SourceAnalysisService {
       db.run("DELETE FROM source_tags WHERE source_asset_id = ? AND source = 'USER'", [sourceId])
       for (const tag of [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))]) db.run("INSERT INTO source_tags (id, source_asset_id, tag, source) VALUES (?, ?, ?, 'USER')", [ulid(), sourceId, tag])
     })
+  }
+
+  async remove(projectId: string, sourceId: string): Promise<void> {
+    if (this.reserved) throw new Error('Đang chuẩn bị tác vụ SRC khác. Hãy chờ rồi xóa lại.')
+    this.reserved = true
+    try {
+      const { db } = await this.context(projectId, sourceId)
+      const task = this.active
+      if (task?.projectId === projectId && task.sourceAssetId === sourceId) {
+        task.controller.abort()
+        await task.done
+      }
+      if (!await this.projects.getProject(projectId)) throw new Error('Dự án không còn tồn tại.')
+      // Remove only owned database records. Never unlink original footage or shared media.
+      db.transaction(() => {
+        db.run('DELETE FROM source_tags WHERE source_asset_id = ?', [sourceId])
+        db.run('DELETE FROM source_issues WHERE analysis_run_id IN (SELECT id FROM source_analysis_runs WHERE project_id = ? AND source_asset_id = ?)', [projectId, sourceId])
+        db.run('DELETE FROM source_segments WHERE analysis_run_id IN (SELECT id FROM source_analysis_runs WHERE project_id = ? AND source_asset_id = ?)', [projectId, sourceId])
+        db.run('DELETE FROM source_analysis_runs WHERE project_id = ? AND source_asset_id = ?', [projectId, sourceId])
+        db.run('DELETE FROM source_assets WHERE project_id = ? AND id = ?', [projectId, sourceId])
+      })
+    } finally { this.reserved = false }
   }
 
   async stop(): Promise<void> {

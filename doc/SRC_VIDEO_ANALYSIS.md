@@ -21,6 +21,8 @@ Nếu tệp nguồn bị di chuyển/không phát được: nút **Liên kết l
 - Mỗi lần chỉ có một tác vụ phân tích video trong ứng dụng. Có hủy; tác vụ phiên trước bị gián đoạn được đánh dấu INTERRUPTED khi mở SRC của dự án.
 - Lưu analysis run, segment, issue, AI tag, đánh giá và tag người dùng bằng migration `src-analysis-v1`.
 - Technical/Editorial score riêng cho từng segment. Không tạo điểm tổng thay thế và không tự nhận diện người.
+- Tiêu chí `src-video-v2-visual-only`: chỉ chấm hình ảnh, bỏ âm thanh/tạp âm và không trừ điểm chỉ vì footage xoay 90°/270° có thể chỉnh hướng ở hậu kỳ. Video gửi đi có thể vẫn chứa audio gốc, nhưng audio score luôn null và AUDIO issue không được công bố. Không sửa file gốc. Kết quả prompt cũ được đánh dấu cần phân tích lại; không tự viết lại điểm lịch sử.
+- Menu ba chấm từng SRC có **Xóa khỏi thư viện**, kèm xác nhận. Tác vụ của SRC đó được hủy trước khi xóa source/analysis/segment/issue/tag trong một transaction. Không unlink footage gốc, thumbnail hoặc media đang được dùng chung.
 - File identity gồm hash đường dẫn, kích thước, mtime và ctime; **không phải content hash**. File/brief thay đổi tạo cảnh báo stale; không ghi đè lịch sử.
 
 Thư viện SRC hiển thị lưới/list, điểm KT/BT và tag trên thumbnail, bảng xem video và đánh giá bên phải. Điểm thumbnail lấy từ segment đầu của lần phân tích hoàn tất gần nhất, không phải điểm chung toàn clip; tooltip ghi phạm vi thời gian. Bảng chất lượng cho phép chọn segment, xem các điểm thành phần, vấn đề theo timestamp và gợi ý sử dụng. Kết quả stale/bị bác bỏ không được dùng làm điểm lọc/xếp hạng.
@@ -59,7 +61,7 @@ Phản hồi phải khai báo `videoObserved=true` trước khi được lưu, n
 - Metadata giới hạn container MOV/MP4, Matroska/WebM và AVI; không mở playlist hoặc network protocol trong FFmpeg.
 - Điểm kỹ thuật của bản chuyển mã **chỉ phản ánh bản proxy**, không khẳng định độ nét/nén của bản gốc. UI lưu và hiển thị giới hạn này.
 - Timestamp AI tương đối với đoạn đã gửi được kiểm tra và cộng offset để trở về video gốc. Cắt/chuyển mã có sai số khung hình/giải mã, chưa hứa frame-accurate.
-- Audio score là null khi không có audio stream hoặc model khai báo chưa nghe được audio. Đây không phải hệ thống đo âm thanh khách quan.
+- Audio score luôn null theo yêu cầu chỉ đánh giá hình ảnh; không hiển thị thanh điểm âm thanh hoặc bộ lọc lỗi AUDIO. Các nhận xét âm thanh cũ vẫn được giữ trong database lịch sử nhưng không hiển thị dưới dạng AUDIO issue; văn bản và điểm cũ có thể vẫn phản ánh tiêu chí trước đây nên cần phân tích lại.
 - Request AI timeout 180 giây; FFprobe 30 giây, chuyển mã tối đa 180 giây. Đoạn gần cuối của video rất dài có thể timeout do giải mã chính xác từ đầu, cần tối ưu tiếp sau khi xác minh tuyến video.
 - Kết quả phải là JSON đúng cấu trúc, không bị cắt, có timestamp/score hợp lệ. Không lưu segment một phần nếu request lỗi/hủy.
 

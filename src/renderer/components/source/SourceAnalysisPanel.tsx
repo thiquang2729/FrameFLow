@@ -7,8 +7,8 @@ export const sourceTime = (seconds: number): string => {
   return `${String(minutes).padStart(2, '0')}:${(seconds % 60).toFixed(2).padStart(5, '0')}`
 }
 const scoreLabel = (value: number | null) => value === null ? '—' : value.toFixed(1)
-const componentLabels: [keyof Pick<SourceScores, 'sharpness' | 'stability' | 'exposure' | 'composition' | 'audio'>, string][] = [
-  ['sharpness', 'Độ nét'], ['stability', 'Ổn định'], ['exposure', 'Phơi sáng'], ['composition', 'Bố cục'], ['audio', 'Âm thanh']
+const componentLabels: [keyof Pick<SourceScores, 'sharpness' | 'stability' | 'exposure' | 'composition'>, string][] = [
+  ['sharpness', 'Độ nét'], ['stability', 'Ổn định'], ['exposure', 'Phơi sáng'], ['composition', 'Bố cục']
 ]
 
 export function SourceAnalysisPanel({ projectId, sourceId, run, onSeek, onRefresh }: {
@@ -43,9 +43,9 @@ export function SourceAnalysisPanel({ projectId, sourceId, run, onSeek, onRefres
   if (run.state !== 'COMPLETED') return <div className="src-analysis-empty" role="status">{run.state === 'RUNNING' ? 'Đang chuẩn bị hoặc gửi video tới AI...' : run.error || 'Lần phân tích chưa hoàn tất.'}</div>
 
   return <div className="src-analysis-results">
-    {run.stale && <p className="src-notice src-notice--warning" role="status">{run.fileChanged ? 'File gốc đã thay đổi hoặc không còn truy cập được. Kết quả này thuộc bản trước.' : 'Brief dự án đã thay đổi. Điểm editorial cần được đánh giá lại.'}</p>}
+    {run.stale && <p className="src-notice src-notice--warning" role="status">{run.fileChanged ? 'File gốc đã thay đổi hoặc không còn truy cập được. Kết quả này thuộc bản trước.' : run.criteriaChanged ? 'Tiêu chí đã đổi: bỏ âm thanh và không trừ điểm do xoay 90°. Hãy phân tích lại để cập nhật điểm.' : 'Brief dự án đã thay đổi. Điểm editorial cần được đánh giá lại.'}</p>}
     <div className="src-result-summary"><h3>Nội dung</h3><p>{run.summary}</p></div>
-    <p className="src-result-provenance">{run.mediaNote} {!run.audioObserved && 'Âm thanh chưa được đánh giá.'}</p>
+    <p className="src-result-provenance">{run.mediaNote}</p>
     {run.tags.length > 0 && <div className="src-tags" aria-label="Tag AI">{run.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
 
     <div className="src-result-section"><h3>Đoạn video <span>{run.segments.length}</span></h3>

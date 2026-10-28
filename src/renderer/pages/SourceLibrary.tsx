@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Film, Folder, LayoutGrid, List, Search, Upload, X, MoreVertical, Plus, SlidersHorizontal, ChevronDown } from 'lucide-react'
+import { Film, Folder, LayoutGrid, List, Search, Upload, X, MoreVertical, Plus, SlidersHorizontal, ChevronDown, Trash2 } from 'lucide-react'
 import { Project, SourceAsset } from '@shared/types'
 import { isSourceImage } from '@shared/media'
 import { useProjectStore } from '../stores/project.store'
@@ -42,6 +42,7 @@ function ProjectSources({ project }: { project: Project }): React.ReactElement {
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [sort, setSort] = useState('recent')
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
+  const [removingId, setRemovingId] = useState<string | null>(null)
   const [analyses, setAnalyses] = useState<SourceAnalysisOverview[]>([])
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [technicalMin, setTechnicalMin] = useState('')
@@ -52,6 +53,7 @@ function ProjectSources({ project }: { project: Project }): React.ReactElement {
   const [durationFilter, setDurationFilter] = useState('')
   const lifetime = useRef<AbortController>(new AbortController())
   const importingRef = useRef(false)
+  const removingRef = useRef(false)
   const analysisLoading = useRef(false)
   const root = useRef<HTMLDivElement>(null)
   const selected = sources.find((asset) => asset.id === selectedId)
@@ -76,6 +78,38 @@ function ProjectSources({ project }: { project: Project }): React.ReactElement {
   const relink = async (sourceId: string) => {
     if (await window.api.sourceAnalysis.relink(project.id, sourceId)) await Promise.all([refreshSources(), refreshAnalysis()])
   }
+  const removeSource = useCallback(async (asset: SourceAsset) => {
+    if (removingRef.current || importingRef.current) return
+    if (typeof window.api.sourceAnalysis?.remove !== 'function') {
+      setError('Ứng dụng đang dùng preload cũ chưa có lệnh xóa SRC. Hãy đóng hoàn toàn FrameFlow rồi mở lại bản mới.')
+      return
+    }
+    if (!window.confirm(`Xóa “${asset.filename}” khỏi thư viện SRC?\n\nLịch sử phân tích và thẻ của SRC này sẽ bị xóa khỏi dự án.\nFile video/ảnh gốc trên máy KHÔNG bị xóa.`)) return
+    removingRef.current = true
+    setRemovingId(asset.id)
+    setError('')
+    const signal = lifetime.current.signal
+    try {
+      await window.api.sourceAnalysis.remove(project.id, asset.id)
+      const saved: SourceAsset[] = await window.api.listSources(project.id)
+      if (signal.aborted) return
+      if (saved.some((item) => item.id === asset.id)) throw new Error('SRC vẫn còn trong dữ liệu dự án. Chưa thể xác nhận đã xóa.')
+      setSources(saved)
+      setAnalyses((list) => list.filter((item) => item.sourceAssetId !== asset.id))
+      setSelectedId((current) => current === asset.id ? null : current)
+      setWorkspaceId((current) => current === asset.id ? null : current)
+      setReport([`Đã xóa ${asset.filename} khỏi thư viện. File gốc được giữ nguyên.`])
+      await refreshStats()
+    } catch (err) {
+      if (!signal.aborted) {
+        const message = err instanceof Error ? err.message : 'Không xóa được SRC.'
+        setError(/No handler registered.*source-analysis:remove/i.test(message)
+          ? 'Backend đang chạy là bản cũ chưa có lệnh xóa SRC. Hãy đóng hoàn toàn FrameFlow rồi mở lại bản mới.'
+          : message)
+      }
+    }
+    finally { removingRef.current = false; if (!signal.aborted) setRemovingId(null) }
+  }, [project.id, refreshStats])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -99,7 +133,7 @@ function ProjectSources({ project }: { project: Project }): React.ReactElement {
   }, [workspaceId])
 
   const importSources = async (folder: boolean) => {
-    if (importingRef.current) return
+    if (importingRef.current || removingRef.current) return
     importingRef.current = true
     setImporting(true)
     setError('')
@@ -185,6 +219,23 @@ function ProjectSources({ project }: { project: Project }): React.ReactElement {
   })
   const lastImported = sources.reduce((latest, item) => item.importedAt > latest ? item.importedAt : latest, '')
 
+  useEffect(() => {
+    const handleDelete = (event: KeyboardEvent) => {
+      if (event.key !== 'Delete' && event.key !== 'Backspace') return
+      if (event.defaultPrevented || event.repeat || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return
+      if (!selected || workspaceId || importingRef.current || removingRef.current || !visible.some((asset) => asset.id === selected.id)) return
+      if (!root.current?.contains(document.activeElement)) return
+      if (document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]')) return
+      const target = event.target
+      if (target instanceof HTMLElement && (target.isContentEditable || target.closest('input, textarea, select, video, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="combobox"]'))) return
+      event.preventDefault()
+      event.stopPropagation()
+      void removeSource(selected)
+    }
+    window.addEventListener('keydown', handleDelete)
+    return () => window.removeEventListener('keydown', handleDelete)
+  }, [selected, workspaceId, visible, removeSource])
+
   return (
     <div className="slib-page" ref={root}>
       <header className="slib-header"><div><h1>Thư viện SRC</h1><div className="slib-project-meta"><Folder size={14} aria-hidden="true" /><span>{project.name}</span><span>·</span><span>{sources.length} tệp</span><span>·</span><span>{sizeLabel(sources.reduce((sum, asset) => sum + (asset.fileSize || 0), 0))}</span>{lastImported && <><span>·</span><span>Cập nhật {new Date(lastImported).toLocaleDateString('vi-VN')}</span></>}</div></div>
@@ -211,7 +262,11 @@ function ProjectSources({ project }: { project: Project }): React.ReactElement {
                   {ai?.latestState === 'RUNNING' && <span className="slib-analysis-state">Đang phân tích</span>}
                   {ai?.stale && ai.latestState !== 'RUNNING' && <span className="slib-analysis-state slib-analysis-state--warning">Cần cập nhật</span>}
                 </button>
-                <div className="slib-asset-body"><div className="slib-asset-title"><button type="button" onClick={() => setSelectedId(asset.id)} title={asset.filename}>{asset.filename}</button><details className="slib-asset-menu"><summary aria-label={`Tùy chọn ${asset.filename}`}><MoreVertical size={17} aria-hidden="true" /></summary><div><button type="button" onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setWorkspaceId(asset.id) }}>Xem lớn / đánh giá</button><button type="button" onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); void relink(asset.id).catch((err) => setError(err instanceof Error ? err.message : 'Không liên kết lại được tệp.')) }}>Liên kết lại tệp</button></div></details></div>
+                <div className="slib-asset-body"><div className="slib-asset-title"><button type="button" onClick={() => setSelectedId(asset.id)} title={asset.filename}>{asset.filename}</button><details className="slib-asset-menu"><summary aria-label={`Tùy chọn ${asset.filename}`}><MoreVertical size={17} aria-hidden="true" /></summary><div>
+                  <button type="button" disabled={removingId === asset.id} onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); setWorkspaceId(asset.id) }}>Xem lớn / đánh giá</button>
+                  <button type="button" disabled={removingId === asset.id} onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); void relink(asset.id).catch((err) => setError(err instanceof Error ? err.message : 'Không liên kết lại được tệp.')) }}>Liên kết lại tệp</button>
+                  <button type="button" className="slib-delete-action" disabled={Boolean(removingId) || importing} onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); void removeSource(asset) }}><Trash2 size={13} aria-hidden="true" />{removingId === asset.id ? 'Đang xóa...' : 'Xóa khỏi thư viện'}</button>
+                </div></details></div>
                 <div className="slib-tags slib-card-tags">{tags.length ? tags.slice(0, 3).map((tag) => <button type="button" key={tag} data-tone={tagTone(tag)} onClick={() => availableTags.includes(tag) ? setTagFilter(tag) : setShotFilter(tag)}>{tag}</button>) : <span className="slib-unanalysed">{isSourceImage(asset.filename) ? 'Ảnh nguồn' : ai?.rejected ? 'Đánh giá đã bác bỏ' : ai?.latestState === 'FAILED' ? 'Phân tích thất bại' : ai?.latestState === 'RUNNING' ? 'Đang phân tích' : 'Chưa có thẻ AI'}</span>}</div>
                 <p className="slib-asset-meta"><span>{mediaResolution(asset.width, asset.height)}</span><span>·</span><span>{sizeLabel(asset.fileSize)}</span><span>·</span><span>{new Date(asset.importedAt).toLocaleDateString('vi-VN')}</span></p></div>
               </article>
