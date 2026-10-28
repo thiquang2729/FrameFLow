@@ -66,6 +66,15 @@ export function SourceAnalysisPanel({ projectId, sourceId, run, onSeek, onRefres
       </article>)}
     </div>
 
+    {run.dialogue && run.dialogue.length > 0 && (
+      <div className="src-result-section"><h3>Lời thoại VJ <span>{run.dialogue.length}</span></h3>
+        <div className="src-segment-list">{run.dialogue.map((line, idx) => <article key={line.id || `dia_${idx}`} className="src-segment">
+          <button type="button" className="src-time-link" onClick={() => onSeek(line.startTime)} disabled={run.fileChanged}>{sourceTime(line.startTime)} → {sourceTime(line.endTime)} · {line.speaker || 'VJ'}</button>
+          <p className="italic">"{line.text}"</p>
+        </article>)}</div>
+      </div>
+    )}
+
     <div className="src-result-section src-user-review"><h3>Đánh giá của bạn</h3>
       <div className="src-review-actions"><button type="button" className="src-button" aria-pressed={review === 'ACCEPTED'} disabled={busy} onClick={() => void save('ACCEPTED')}><Check size={14} aria-hidden="true" />Đồng ý</button><button type="button" className="src-button" aria-pressed={review === 'REJECTED'} disabled={busy} onClick={() => void save('REJECTED')}><X size={14} aria-hidden="true" />Không đồng ý</button></div>
       <label htmlFor="src-user-tags">Tag của bạn</label><input id="src-user-tags" value={tags} maxLength={3000} onChange={(event) => setTags(event.target.value)} placeholder="Phân tách bằng dấu phẩy" />

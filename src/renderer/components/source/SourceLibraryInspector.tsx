@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { BadgeCheck, BrainCircuit, Copy, Lightbulb, Maximize2, Play, Plus, Sparkles, Tags, TriangleAlert, X } from 'lucide-react'
+import { BadgeCheck, BrainCircuit, Copy, Lightbulb, Maximize2, MessageSquare, Play, Plus, Sparkles, Tags, TriangleAlert, X } from 'lucide-react'
 import type { Project, SourceAsset } from '@shared/types'
 import type { SourceAnalysisRun, SourceScores } from '../../../shared/types/source-analysis'
 import { isSourceImage } from '@shared/media'
@@ -143,6 +143,31 @@ export function SourceLibraryInspector({ project, source, onClose, onOpenWorkspa
       <section className="slib-detail-section slib-detail-section--issues"><header><h3><TriangleAlert size={17} aria-hidden="true" />Vấn đề</h3>{run && <span className="slib-section-count">{run.issues.length}</span>}</header>
         {run?.issues.length ? <div className="slib-issue-list">{run.issues.map((issue) => <button type="button" key={issue.id} disabled={run.fileChanged} onClick={() => seek(issue.startTime)} title={issue.evidence}><span className="slib-issue-meta">{sourceTime(issue.startTime)} · {issueLabels[issue.type]}<span data-severity={issue.severity}>{issue.severity}</span></span><span>{issue.description}</span></button>)}</div> : <p className="slib-summary">{run ? 'AI không ghi nhận vấn đề trong đoạn đã gửi.' : 'Chưa có dữ liệu.'}</p>}
       </section>
+
+      {run && run.dialogue && run.dialogue.length > 0 && (
+        <section className="slib-detail-section slib-detail-section--dialogue">
+          <header>
+            <h3><MessageSquare size={17} aria-hidden="true" />Lời thoại VJ</h3>
+            <span className="slib-section-count">{run.dialogue.length}</span>
+          </header>
+          <div className="slib-issue-list">
+            {run.dialogue.map((line, idx) => (
+              <button
+                type="button"
+                key={line.id || `dia_${idx}`}
+                disabled={run.fileChanged}
+                onClick={() => seek(line.startTime)}
+                title={`Bấm để chuyển tới ${sourceTime(line.startTime)}`}
+              >
+                <span className="slib-issue-meta">
+                  {sourceTime(line.startTime)}–{sourceTime(line.endTime)} · {line.speaker || 'VJ'}
+                </span>
+                <span className="italic text-slate-700">"{line.text}"</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="slib-detail-section slib-detail-section--use">
         <header><h3><Lightbulb size={17} aria-hidden="true" />Cách dùng tốt nhất</h3></header>

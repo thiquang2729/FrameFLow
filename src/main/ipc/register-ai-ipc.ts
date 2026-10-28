@@ -18,7 +18,9 @@ export function registerAiIpc(service: AiService): void {
   handle('ai:login', () => service.login())
   handle('ai:cancel-login', () => service.cancelLogin())
   handle('ai:models', () => service.listModels())
+  handle('ai:video-models', () => service.listVideoModelCandidates())
   handle('ai:select-model', (model: string) => service.selectModel(model))
+  handle('ai:select-src-model', (model: string) => service.selectSrcModel(model))
   handle('ai:test', (model: string, prompt: string) => service.testPrompt(model, prompt))
   handle('ai:cancel-test', () => service.cancelTest())
 }

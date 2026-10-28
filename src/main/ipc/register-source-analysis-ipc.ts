@@ -26,6 +26,7 @@ export function registerSourceAnalysisIpc(service: SourceAnalysisService): void 
   })
   handle('source-analysis:list', (projectId: string, sourceId: string) => service.list(projectId, sourceId))
   handle('source-analysis:start', (request: SourceAnalysisRequest) => service.start(request))
+  handle('source-analysis:wait', (projectId: string, sourceId: string, runId: string) => service.wait(projectId, sourceId, runId))
   handle('source-analysis:cancel', (projectId: string, sourceId: string, runId: string) => service.cancel(projectId, sourceId, runId))
   handle('source-analysis:review', (projectId: string, sourceId: string, runId: string, review: AnalysisReview, note: string, tags: string[]) => service.review(projectId, sourceId, runId, review, note, tags))
 }

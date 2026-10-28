@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { X, Folder, Sparkles } from 'lucide-react'
+import { X, Folder, Sparkles, FileUp } from 'lucide-react'
 import { useProjectStore } from '../../stores/project.store'
 
 interface CreateProjectModalProps {
@@ -18,7 +18,22 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
   const [aspectRatio, setAspectRatio] = useState('9:16')
   const [projectDir, setProjectDir] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isParsingScript, setIsParsingScript] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const handleImportScriptFile = async () => {
+    try {
+      setIsParsingScript(true)
+      setError(null)
+      const parsed = await window.api.selectScriptFile()
+      if (!parsed) return
+      setScript(parsed.text)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Không thể đọc tệp kịch bản.')
+    } finally {
+      setIsParsingScript(false)
+    }
+  }
 
   if (!isOpen) return null
 
@@ -133,9 +148,21 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
 
           {/* Script (Optional) */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              Kịch bản phân cảnh (tùy chọn)
-            </label>
+            <div className="flex items-center justify-between mb-1.5 gap-2">
+              <label className="block text-xs font-semibold text-slate-700">
+                Kịch bản phân cảnh (tùy chọn)
+              </label>
+              <button
+                type="button"
+                disabled={isSubmitting || isParsingScript}
+                onClick={handleImportScriptFile}
+                className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                title="Hỗ trợ các định dạng: PDF, DOCX, XLSX, TXT, JSON, CSV"
+              >
+                <FileUp size={12} />
+                <span>{isParsingScript ? 'Đang đọc...' : 'Nhập tệp kịch bản (PDF, Word, Excel, TXT, JSON...)'}</span>
+              </button>
+            </div>
             <textarea
               aria-label="Kịch bản phân cảnh"
               disabled={isSubmitting}

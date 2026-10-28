@@ -23,6 +23,8 @@ const api = {
     relink: (projectId: string, sourceId: string): Promise<boolean> => ipcRenderer.invoke('source-analysis:relink', projectId, sourceId),
     list: (projectId: string, sourceId: string): Promise<SourceAnalysisRun[]> => ipcRenderer.invoke('source-analysis:list', projectId, sourceId),
     start: (request: SourceAnalysisRequest): Promise<{ id: string }> => ipcRenderer.invoke('source-analysis:start', request),
+    wait: (projectId: string, sourceId: string, runId: string): Promise<{ state: AnalysisState; error?: string }> =>
+      ipcRenderer.invoke('source-analysis:wait', projectId, sourceId, runId),
     cancel: (projectId: string, sourceId: string, runId: string): Promise<void> => ipcRenderer.invoke('source-analysis:cancel', projectId, sourceId, runId),
     review: (projectId: string, sourceId: string, runId: string, review: AnalysisReview, note: string, tags: string[]): Promise<void> => ipcRenderer.invoke('source-analysis:review', projectId, sourceId, runId, review, note, tags)
   },
@@ -32,7 +34,9 @@ const api = {
     login: (): Promise<AiStatus> => ipcRenderer.invoke('ai:login'),
     cancelLogin: (): Promise<void> => ipcRenderer.invoke('ai:cancel-login'),
     models: (): Promise<string[]> => ipcRenderer.invoke('ai:models'),
+    videoModels: (): Promise<string[]> => ipcRenderer.invoke('ai:video-models'),
     selectModel: (model: string): Promise<void> => ipcRenderer.invoke('ai:select-model', model),
+    selectSrcModel: (model: string): Promise<void> => ipcRenderer.invoke('ai:select-src-model', model),
     test: (model: string, prompt: string): Promise<AiTestResult> => ipcRenderer.invoke('ai:test', model, prompt),
     cancelTest: (): Promise<void> => ipcRenderer.invoke('ai:cancel-test')
   },
@@ -40,6 +44,8 @@ const api = {
   selectDirectory: () => ipcRenderer.invoke(IPC_CHANNELS.SELECT_DIRECTORY),
   selectVideoFile: () => ipcRenderer.invoke(IPC_CHANNELS.SELECT_VIDEO_FILE),
   selectMediaFiles: () => ipcRenderer.invoke(IPC_CHANNELS.SELECT_MEDIA_FILES),
+  selectScriptFile: () => ipcRenderer.invoke(IPC_CHANNELS.SELECT_SCRIPT_FILE),
+  parseScriptFile: (filePath: string) => ipcRenderer.invoke(IPC_CHANNELS.PARSE_SCRIPT_FILE, filePath),
 
   // Projects
   listProjects: () => ipcRenderer.invoke(IPC_CHANNELS.PROJECT_LIST),

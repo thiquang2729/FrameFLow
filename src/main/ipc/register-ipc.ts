@@ -15,14 +15,18 @@ import { VersionService } from '../services/version.service'
 import { ReviewService } from '../services/review.service'
 import { SourceService } from '../services/source.service'
 import { ExportService } from '../services/export.service'
+import { ScriptParserService } from '../services/script-parser.service'
 
 export function registerIpcHandlers(
   projectService: ProjectService,
   versionService: VersionService,
   reviewService: ReviewService,
   sourceService: SourceService,
-  exportService: ExportService
+  exportService: ExportService,
+  scriptParserService?: ScriptParserService
 ): void {
+  const scriptParser = scriptParserService || new ScriptParserService()
+
   // --- Dialogs ---
   ipcMain.handle(IPC_CHANNELS.SELECT_DIRECTORY, async () => {
     const result = await dialog.showOpenDialog({
@@ -51,6 +55,26 @@ export function registerIpcHandlers(
       ]
     })
     return result.canceled ? [] : result.filePaths
+  })
+
+  ipcMain.handle(IPC_CHANNELS.SELECT_SCRIPT_FILE, async () => {
+    const result = await dialog.showOpenDialog({
+      title: 'Chọn tệp kịch bản',
+      properties: ['openFile'],
+      filters: [
+        {
+          name: 'Tệp kịch bản (PDF, DOCX, XLSX, TXT, JSON, CSV)',
+          extensions: ['docx', 'xlsx', 'xls', 'pdf', 'txt', 'json', 'csv', 'md']
+        },
+        { name: 'Tất cả tệp', extensions: ['*'] }
+      ]
+    })
+    if (result.canceled || !result.filePaths[0]) return null
+    return scriptParser.parseFile(result.filePaths[0])
+  })
+
+  ipcMain.handle(IPC_CHANNELS.PARSE_SCRIPT_FILE, async (_, filePath: string) => {
+    return scriptParser.parseFile(filePath)
   })
 
   // --- Project ---

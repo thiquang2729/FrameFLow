@@ -35,7 +35,7 @@ export async function freeLocalPort(preferredPort = 0): Promise<number> {
 export class AiService {
   private status: AiStatus = {
     state: 'stopped', message: 'AI chưa khởi động.', version: '8.0.45', endpoint: null,
-    pid: null, accounts: 0, login: 'idle', loginMessage: '', selectedModel: ''
+    pid: null, accounts: 0, login: 'idle', loginMessage: '', selectedModel: '', srcModel: ''
   }
   private server: ChildProcessWithoutNullStreams | null = null
   private loginProcess: ChildProcessWithoutNullStreams | null = null
@@ -58,6 +58,7 @@ export class AiService {
     try {
       const settings = JSON.parse(fs.readFileSync(path.join(options.dataDir, 'settings.json'), 'utf8'))
       if (typeof settings.selectedModel === 'string') this.status.selectedModel = settings.selectedModel.slice(0, 200)
+      if (typeof settings.srcModel === 'string') this.status.srcModel = settings.srcModel.slice(0, 200)
     } catch { /* No model selected yet. */ }
   }
 
@@ -219,6 +220,16 @@ export class AiService {
     catch { throw new Error('AI trả về dữ liệu không hợp lệ.') }
   }
 
+  private saveSettings(patch: Record<string, unknown>): void {
+    const file = path.join(this.options.dataDir, 'settings.json')
+    let current: Record<string, unknown> = {}
+    try {
+      current = JSON.parse(fs.readFileSync(file, 'utf8'))
+    } catch { /* empty */ }
+    const updated = { ...current, ...patch }
+    fs.writeFileSync(file, JSON.stringify(updated, null, 2), { mode: 0o600 })
+  }
+
   async listModels(): Promise<string[]> {
     if (this.status.state !== 'ready') throw new Error('Chờ proxy sẵn sàng trước khi lấy model.')
     const result = await this.request('/models')
@@ -227,20 +238,32 @@ export class AiService {
   }
 
   async selectModel(model: string): Promise<void> {
-    if (typeof model !== 'string' || !(await this.listModels()).includes(model)) throw new Error('Hãy chọn model có trong danh sách proxy.')
-    fs.writeFileSync(path.join(this.options.dataDir, 'settings.json'), JSON.stringify({ selectedModel: model }), { mode: 0o600 })
+    if (typeof model !== 'string' || !(await this.listModels()).includes(model)) {
+      throw new Error('Hãy chọn model có trong danh sách proxy.')
+    }
+    this.saveSettings({ selectedModel: model })
     this.status.selectedModel = model
+  }
+
+  async selectSrcModel(model: string): Promise<void> {
+    if (typeof model !== 'string') throw new Error('Tên model không hợp lệ.')
+    this.saveSettings({ srcModel: model })
+    this.status.srcModel = model
   }
 
   async listVideoModelCandidates(): Promise<string[]> {
     if (this.status.state !== 'ready') return []
     // Catalog membership is not proof of video capability. Keep this distinction in the UI.
-    const result = await this.request('/models', undefined, 15000, undefined, true)
-    if (!Array.isArray(result.models)) throw new Error('Proxy chưa cung cấp danh sách model theo giao thức Gemini.')
-    return [...new Set<string>(result.models
-      .filter((item: any) => typeof item?.name === 'string')
-      .map((item: any) => item.name.replace(/^models\//, ''))
-      .filter((name: string) => name.length <= 200 && /gemini/i.test(name) && !/image|embedding|tts/i.test(name)))].sort()
+    try {
+      const result = await this.request('/models', undefined, 15000, undefined, true)
+      if (!Array.isArray(result?.models)) return []
+      return [...new Set<string>(result.models
+        .filter((item: any) => typeof item?.name === 'string')
+        .map((item: any) => item.name.replace(/^models\//, ''))
+        .filter((name: string) => name.length <= 200 && /gemini/i.test(name) && !/image|embedding|tts/i.test(name)))].sort()
+    } catch {
+      return []
+    }
   }
 
   async generateVideo(model: string, bytes: Buffer, mimeType: string, prompt: string, signal: AbortSignal): Promise<{ text: string; returnedModel: string | null }> {

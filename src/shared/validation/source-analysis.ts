@@ -1,4 +1,4 @@
-import type { SourceAnalysisIssue, SourceAnalysisSegment, SourceScores } from '../types/source-analysis'
+import type { SourceAnalysisIssue, SourceAnalysisSegment, SourceDialogueLine, SourceScores } from '../types/source-analysis'
 
 type RecordValue = Record<string, unknown>
 function record(value: unknown): RecordValue {
@@ -25,7 +25,7 @@ function range(value: RecordValue, duration: number, offset: number): { startTim
 
 export function validateSourceAnalysis(input: unknown, duration: number, offset: number): {
   summary: string; audioObserved: boolean; segments: Omit<SourceAnalysisSegment, 'id'>[];
-  issues: Omit<SourceAnalysisIssue, 'id'>[]; tags: string[]
+  issues: Omit<SourceAnalysisIssue, 'id'>[]; tags: string[]; dialogue: SourceDialogueLine[]
 } {
   const root = record(input)
   // This declaration is not independent evidence of upstream video support.
@@ -56,5 +56,23 @@ export function validateSourceAnalysis(input: unknown, duration: number, offset:
     return { ...range(row, duration, offset), type: row.type as SourceAnalysisIssue['type'], severity: row.severity as SourceAnalysisIssue['severity'], description: text(row.description), evidence: text(row.evidence) }
   })
   if (!Array.isArray(root.tags) || root.tags.length > 30) throw new Error('Danh sách tag AI không hợp lệ.')
-  return { summary: text(root.summary, 6000), audioObserved, segments, issues, tags: [...new Set(root.tags.map((tag) => text(tag, 100)).filter(Boolean))] }
+  const dialogue: SourceDialogueLine[] = []
+  if (Array.isArray(root.dialogue)) {
+    if (root.dialogue.length > 100) throw new Error('Số lượng câu thoại AI vượt quá giới hạn (tối đa 100).')
+    for (const entry of root.dialogue) {
+      const row = record(entry)
+      const lineText = text(row.text, 2000)
+      if (!lineText) continue
+      const lineRange = range(row, duration, offset)
+      const speaker = typeof row.speaker === 'string' && row.speaker.trim() ? text(row.speaker, 100) : 'VJ'
+      dialogue.push({
+        startTime: lineRange.startTime,
+        endTime: lineRange.endTime,
+        speaker,
+        text: lineText
+      })
+    }
+    dialogue.sort((a, b) => a.startTime - b.startTime)
+  }
+  return { summary: text(root.summary, 6000), audioObserved, segments, issues, tags: [...new Set(root.tags.map((tag) => text(tag, 100)).filter(Boolean))], dialogue }
 }

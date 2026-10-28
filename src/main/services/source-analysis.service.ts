@@ -9,6 +9,7 @@ import type { AnalysisReview, SourceAnalysisEnvironment, SourceAnalysisOverview,
 import { validateSourceAnalysis } from '../../shared/validation/source-analysis'
 import { sourceVideoPrompt, VIDEO_MAX_BYTES, VIDEO_MAX_DURATION, VIDEO_PROMPT_VERSION } from './ai-video-adapter'
 import { SOURCE_EXTENSIONS, isSourceImage } from '../../shared/media'
+import { SourceSidecarService } from './source-sidecar.service'
 
 type Row = Record<string, any>
 const identifier = (value: unknown): string => {
@@ -21,8 +22,11 @@ export class SourceAnalysisService {
   private reserved = false
   private closing = false
   private active: { projectId: string; sourceAssetId: string; id: string; controller: AbortController; done: Promise<void> } | null = null
+  private sidecar: SourceSidecarService
 
-  constructor(private projects: ProjectService, private ai: AiService, private media: SourceMediaService) {}
+  constructor(private projects: ProjectService, private ai: AiService, private media: SourceMediaService, sidecar?: SourceSidecarService) {
+    this.sidecar = sidecar || new SourceSidecarService()
+  }
 
   private async context(projectId: string, sourceId: string): Promise<{ db: DatabaseManager; source: Row; project: NonNullable<Awaited<ReturnType<ProjectService['getProject']>>> }> {
     identifier(projectId); identifier(sourceId)
@@ -52,7 +56,12 @@ export class SourceAnalysisService {
     const tools = await this.media.availability()
     const status = this.ai.getStatus()
     const models = status.state === 'ready' ? await this.ai.listVideoModelCandidates() : []
-    return { mediaReady: tools.ready, mediaMessage: tools.message, aiReady: status.state === 'ready' && status.accounts > 0, models, selectedModel: status.selectedModel, videoRoute: 'UNVERIFIED', maxDuration: VIDEO_MAX_DURATION, maxVideoBytes: VIDEO_MAX_BYTES }
+    const preferredModel = (status.srcModel && models.includes(status.srcModel))
+      ? status.srcModel
+      : (status.selectedModel && models.includes(status.selectedModel))
+        ? status.selectedModel
+        : (models[0] || '')
+    return { mediaReady: tools.ready, mediaMessage: tools.message, aiReady: status.state === 'ready' && status.accounts > 0, models, selectedModel: preferredModel, videoRoute: 'UNVERIFIED', maxDuration: VIDEO_MAX_DURATION, maxVideoBytes: VIDEO_MAX_BYTES }
   }
 
   async probe(projectId: string, sourceId: string): Promise<SourceMediaInfo> {
@@ -76,12 +85,72 @@ export class SourceAnalysisService {
     db.run('UPDATE source_assets SET original_path = ?, filename = ?, file_size = ?, duration = NULL, width = NULL, height = NULL, fps = NULL, codec = NULL, thumbnail_path = NULL, proxy_path = NULL, file_hash = NULL WHERE id = ? AND project_id = ?', [file, path.basename(file), stats.size, sourceId, projectId])
   }
 
+  async hydrateFromSidecar(projectId: string, sourceId: string): Promise<boolean> {
+    try {
+      const { db, source } = await this.context(projectId, sourceId)
+      const existing = db.get<{ count: number }>('SELECT COUNT(*) as count FROM source_analysis_runs WHERE project_id = ? AND source_asset_id = ?', [projectId, sourceId])
+      if (existing && existing.count > 0) return false
+
+      const sidecarData = await this.sidecar.readSidecar(source.original_path)
+      if (!sidecarData || !sidecarData.segments || !sidecarData.segments.length) return false
+
+      const runId = ulid()
+      const now = new Date().toISOString()
+      let fingerprint = sidecarData.source?.fingerprint
+      if (!fingerprint) {
+        try { fingerprint = await this.media.fingerprint(source.original_path) } catch { fingerprint = 'sidecar-cached' }
+      }
+      const startTime = sidecarData.segments[0]?.startTime ?? 0
+      const endTime = sidecarData.segments[sidecarData.segments.length - 1]?.endTime ?? sidecarData.source?.duration ?? 60
+
+      db.transaction(() => {
+        db.run(`INSERT INTO source_analysis_runs
+          (id, project_id, source_asset_id, state, model, protocol, prompt_version, brief, file_fingerprint, start_time, end_time, summary, audio_observed, media_method, media_note, review, created_at, completed_at)
+          VALUES (?, ?, ?, 'COMPLETED', 'sidecar-cache', 'gemini-inline-video', ?, '', ?, ?, ?, ?, 0, 'original', 'Được nạp từ tệp sidecar có sẵn', 'UNREVIEWED', ?, ?)`,
+          [runId, projectId, sourceId, VIDEO_PROMPT_VERSION, fingerprint, startTime, endTime, sidecarData.overallSummary || '', sidecarData.updatedAt || now, now]
+        )
+        for (const segment of sidecarData.segments) {
+          db.run('INSERT INTO source_segments (id, analysis_run_id, start_time, end_time, summary, shot_type, recommended_use, scores_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [ulid(), runId, segment.startTime, segment.endTime, segment.summary, segment.shotType, segment.recommendedUse, JSON.stringify(segment.scores)]
+          )
+        }
+        for (const issue of sidecarData.issues) {
+          db.run('INSERT INTO source_issues (id, analysis_run_id, start_time, end_time, type, severity, description, evidence) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [ulid(), runId, issue.startTime, issue.endTime, issue.type, issue.severity, issue.description, issue.evidence]
+          )
+        }
+        for (const tag of sidecarData.tags) {
+          db.run("INSERT INTO source_tags (id, source_asset_id, analysis_run_id, tag, source) VALUES (?, ?, ?, ?, 'AI')",
+            [ulid(), sourceId, runId, tag]
+          )
+        }
+        if (Array.isArray(sidecarData.dialogue)) {
+          for (const line of sidecarData.dialogue) {
+            db.run('INSERT INTO source_dialogues (id, analysis_run_id, source_asset_id, start_time, end_time, speaker, text) VALUES (?, ?, ?, ?, ?, ?, ?)',
+              [ulid(), runId, sourceId, line.startTime, line.endTime, line.speaker || null, line.text]
+            )
+          }
+        }
+      })
+      return true
+    } catch (err) {
+      console.warn(`[SourceAnalysis] Không thể hydrate từ sidecar cho SRC ${sourceId}:`, err)
+      return false
+    }
+  }
+
   async list(projectId: string, sourceId: string): Promise<SourceAnalysisRun[]> {
     const { db, source, project } = await this.context(projectId, sourceId)
     let fingerprint: string | null = null
     try { fingerprint = await this.media.fingerprint(source.original_path) } catch { /* Missing source is stale, not lost history. */ }
     const brief = this.brief(project)
-    const rows = db.query<Row>('SELECT * FROM source_analysis_runs WHERE project_id = ? AND source_asset_id = ? ORDER BY created_at DESC, id DESC LIMIT 100', [projectId, sourceId])
+    let rows = db.query<Row>('SELECT * FROM source_analysis_runs WHERE project_id = ? AND source_asset_id = ? ORDER BY created_at DESC, id DESC LIMIT 100', [projectId, sourceId])
+    if (rows.length === 0) {
+      const hydrated = await this.hydrateFromSidecar(projectId, sourceId)
+      if (hydrated) {
+        rows = db.query<Row>('SELECT * FROM source_analysis_runs WHERE project_id = ? AND source_asset_id = ? ORDER BY created_at DESC, id DESC LIMIT 100', [projectId, sourceId])
+      }
+    }
     const userTags = db.query<{ tag: string }>("SELECT tag FROM source_tags WHERE source_asset_id = ? AND source = 'USER' ORDER BY tag", [sourceId]).map((row) => row.tag)
     return rows.map((row) => ({
       id: row.id, sourceAssetId: sourceId, state: row.state, model: row.model, returnedModel: row.returned_model,
@@ -92,6 +161,7 @@ export class SourceAnalysisService {
       fileChanged: fingerprint !== row.file_fingerprint, briefChanged: brief !== row.brief, criteriaChanged: row.prompt_version !== VIDEO_PROMPT_VERSION,
       segments: db.query<Row>('SELECT * FROM source_segments WHERE analysis_run_id = ? ORDER BY start_time', [row.id]).map((segment) => ({ id: segment.id, startTime: segment.start_time, endTime: segment.end_time, summary: segment.summary, shotType: segment.shot_type, recommendedUse: segment.recommended_use, scores: JSON.parse(segment.scores_json) })),
       issues: db.query<Row>("SELECT * FROM source_issues WHERE analysis_run_id = ? AND type <> 'AUDIO' ORDER BY start_time", [row.id]).map((issue) => ({ id: issue.id, startTime: issue.start_time, endTime: issue.end_time, type: issue.type, severity: issue.severity, description: issue.description, evidence: issue.evidence })),
+      dialogue: db.query<Row>('SELECT * FROM source_dialogues WHERE analysis_run_id = ? ORDER BY start_time', [row.id]).map((d) => ({ id: d.id, startTime: d.start_time, endTime: d.end_time, speaker: d.speaker || undefined, text: d.text })),
       tags: db.query<{ tag: string }>("SELECT tag FROM source_tags WHERE analysis_run_id = ? AND source = 'AI' ORDER BY tag", [row.id]).map((tag) => tag.tag), userTags
     }))
   }
@@ -105,6 +175,16 @@ export class SourceAnalysisService {
       db.run("UPDATE source_analysis_runs SET state = 'INTERRUPTED', error = ?, completed_at = ? WHERE project_id = ? AND state = 'RUNNING'", ['Phiên trước bị gián đoạn. Chọn phân tích lại để tạo lần chạy mới.', new Date().toISOString(), projectId])
       this.recovered.add(projectId)
     }
+
+    // Hydrate any source assets that have existing sidecars but no runs in DB
+    const unanalyzed = db.query<{ id: string }>(
+      'SELECT id FROM source_assets WHERE project_id = ? AND id NOT IN (SELECT DISTINCT source_asset_id FROM source_analysis_runs WHERE project_id = ?)',
+      [projectId, projectId]
+    )
+    for (const item of unanalyzed) {
+      await this.hydrateFromSidecar(projectId, item.id)
+    }
+
     // A single library request, not one full history IPC call per thumbnail.
     const rows = db.query<Row>(`SELECT a.id AS source_id, a.original_path,
       latest.state AS latest_state, completed.*
@@ -125,12 +205,15 @@ export class SourceAnalysisService {
       const first = segments[0]
       const scores = first ? JSON.parse(first.scores_json) : null
       const tags = db.query<{ tag: string }>("SELECT tag FROM source_tags WHERE source_asset_id = ? AND (source = 'USER' OR (source = 'AI' AND analysis_run_id = ?)) ORDER BY source DESC, tag", [row.source_id, row.id || null]).map((tag) => tag.tag)
+      const dialogueCount = row.id ? (db.get<{ count: number }>('SELECT COUNT(*) as count FROM source_dialogues WHERE analysis_run_id = ?', [row.id])?.count || 0) : 0
       result.push({ sourceAssetId: row.source_id, latestState: row.latest_state, runId: row.id || null,
         summary: row.summary || '', technical: scores?.technical ?? null, editorial: scores?.editorial ?? null,
         startTime: first?.start_time ?? null, endTime: first?.end_time ?? null, tags: [...new Set(tags)],
         shotTypes: [...new Set<string>(segments.map((item) => item.shot_type).filter(Boolean))],
         recommendedUses: [...new Set<string>(segments.map((item) => item.recommended_use).filter(Boolean))],
-        issueTypes: row.id ? db.query<{ type: string }>("SELECT DISTINCT type FROM source_issues WHERE analysis_run_id = ? AND type <> 'AUDIO'", [row.id]).map((issue) => issue.type) : [], stale, rejected: row.review === 'REJECTED' })
+        issueTypes: row.id ? db.query<{ type: string }>("SELECT DISTINCT type FROM source_issues WHERE analysis_run_id = ? AND type <> 'AUDIO'", [row.id]).map((issue) => issue.type) : [],
+        dialogueCount,
+        stale, rejected: row.review === 'REJECTED' })
     }
     return result
   }
@@ -196,7 +279,23 @@ export class SourceAnalysisService {
         for (const segment of result.segments) db.run('INSERT INTO source_segments (id, analysis_run_id, start_time, end_time, summary, shot_type, recommended_use, scores_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [ulid(), id, segment.startTime, segment.endTime, segment.summary, segment.shotType, segment.recommendedUse, JSON.stringify(segment.scores)])
         for (const issue of result.issues) db.run('INSERT INTO source_issues (id, analysis_run_id, start_time, end_time, type, severity, description, evidence) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [ulid(), id, issue.startTime, issue.endTime, issue.type, issue.severity, issue.description, issue.evidence])
         for (const tag of result.tags) db.run("INSERT INTO source_tags (id, source_asset_id, analysis_run_id, tag, source) VALUES (?, ?, ?, ?, 'AI')", [ulid(), request.sourceAssetId, id, tag])
+        for (const line of result.dialogue) db.run('INSERT INTO source_dialogues (id, analysis_run_id, source_asset_id, start_time, end_time, speaker, text) VALUES (?, ?, ?, ?, ?, ?, ?)', [ulid(), id, request.sourceAssetId, line.startTime, line.endTime, line.speaker || null, line.text])
         db.run("UPDATE source_analysis_runs SET state = 'COMPLETED', summary = ?, audio_observed = ?, returned_model = ?, completed_at = ? WHERE id = ?", [result.summary, result.audioObserved ? 1 : 0, response.returnedModel, new Date().toISOString(), id])
+      })
+      await this.sidecar.mergeAndSave(file, {
+        fingerprint,
+        duration: info.duration,
+        width: info.width,
+        height: info.height,
+        fps: info.fps,
+        fileSize: info.fileSize,
+        startTime: request.startTime,
+        endTime: request.endTime,
+        summary: result.summary,
+        dialogue: result.dialogue,
+        segments: result.segments,
+        issues: result.issues,
+        tags: result.tags
       })
     } catch (error) {
       const message = signal.aborted ? 'Đã hủy phân tích.' : error instanceof Error ? error.message : 'Phân tích video thất bại.'
@@ -210,6 +309,24 @@ export class SourceAnalysisService {
     await this.context(projectId, sourceId)
     identifier(runId)
     if (this.active?.id === runId && this.active.projectId === projectId && this.active.sourceAssetId === sourceId) this.active.controller.abort()
+  }
+
+  async wait(projectId: string, sourceId: string, runId: string): Promise<{ state: AnalysisState; error?: string }> {
+    identifier(projectId)
+    identifier(sourceId)
+    identifier(runId)
+    if (this.active?.id === runId && this.active.projectId === projectId && this.active.sourceAssetId === sourceId) {
+      await this.active.done.catch(() => {})
+    }
+    const { db } = await this.context(projectId, sourceId)
+    const run = db.get<{ state: AnalysisState; error: string | null }>(
+      'SELECT state, error FROM source_analysis_runs WHERE id = ?',
+      [runId]
+    )
+    return {
+      state: run?.state || 'FAILED',
+      error: run?.error || undefined
+    }
   }
 
   async review(projectId: string, sourceId: string, runId: string, review: AnalysisReview, note: string, tags: string[]): Promise<void> {

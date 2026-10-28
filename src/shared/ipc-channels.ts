@@ -9,6 +9,8 @@ export const IPC_CHANNELS = {
   SELECT_DIRECTORY: 'dialog:select-directory',
   SELECT_VIDEO_FILE: 'dialog:select-video-file',
   SELECT_MEDIA_FILES: 'dialog:select-media-files',
+  SELECT_SCRIPT_FILE: 'dialog:select-script-file',
+  PARSE_SCRIPT_FILE: 'script:parse-file',
 
   // Version
   VERSION_LIST: 'version:list',

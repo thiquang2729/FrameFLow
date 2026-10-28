@@ -8,6 +8,7 @@ export interface AiStatus {
   login: 'idle' | 'waiting' | 'success' | 'error'
   loginMessage: string
   selectedModel: string
+  srcModel?: string
 }
 
 export interface AiTestResult {

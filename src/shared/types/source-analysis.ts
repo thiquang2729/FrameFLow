@@ -32,6 +32,14 @@ export interface SourceAnalysisIssue {
   evidence: string
 }
 
+export interface SourceDialogueLine {
+  id?: string
+  startTime: number
+  endTime: number
+  speaker?: string
+  text: string
+}
+
 export interface SourceAnalysisRun {
   id: string
   sourceAssetId: string
@@ -58,6 +66,7 @@ export interface SourceAnalysisRun {
   criteriaChanged: boolean
   segments: SourceAnalysisSegment[]
   issues: SourceAnalysisIssue[]
+  dialogue: SourceDialogueLine[]
   tags: string[]
   userTags: string[]
 }
@@ -107,6 +116,27 @@ export interface SourceAnalysisOverview {
   shotTypes: string[]
   recommendedUses: string[]
   issueTypes: string[]
+  dialogueCount: number
   stale: boolean
   rejected: boolean
+}
+
+export interface SourceSidecarAnalysis {
+  version: '1.0'
+  updatedAt: string
+  source: {
+    fileName: string
+    filePath: string
+    fingerprint: string
+    duration: number
+    width: number
+    height: number
+    fps: number | null
+    fileSize: number
+  }
+  overallSummary: string
+  dialogue: SourceDialogueLine[]
+  segments: SourceAnalysisSegment[]
+  issues: SourceAnalysisIssue[]
+  tags: string[]
 }

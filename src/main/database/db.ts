@@ -219,6 +219,32 @@ export class DatabaseManager {
         throw error
       }
     }
+    if (!this.get('SELECT name FROM module_migrations WHERE name = ?', ['src-analysis-v2-dialogue'])) {
+      try {
+        this.db.run(`
+        BEGIN TRANSACTION;
+        CREATE TABLE IF NOT EXISTS source_dialogues (
+          id TEXT PRIMARY KEY,
+          analysis_run_id TEXT NOT NULL,
+          source_asset_id TEXT NOT NULL,
+          start_time REAL NOT NULL,
+          end_time REAL NOT NULL,
+          speaker TEXT,
+          text TEXT NOT NULL,
+          CHECK(start_time >= 0 AND end_time >= start_time),
+          FOREIGN KEY(analysis_run_id) REFERENCES source_analysis_runs(id),
+          FOREIGN KEY(source_asset_id) REFERENCES source_assets(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_dialogues_run ON source_dialogues(analysis_run_id, start_time);
+        CREATE INDEX IF NOT EXISTS idx_dialogues_source ON source_dialogues(source_asset_id, start_time);
+        INSERT INTO module_migrations (name, version) VALUES ('src-analysis-v2-dialogue', 2);
+        COMMIT;
+        `)
+      } catch (error) {
+        this.db.run('ROLLBACK')
+        throw error
+      }
+    }
   }
 
   public persist(): void {

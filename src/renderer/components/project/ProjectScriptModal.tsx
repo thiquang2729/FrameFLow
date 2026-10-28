@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { X, FileText, Sparkles, Check, AlertCircle } from 'lucide-react'
+import { X, FileText, Sparkles, Check, AlertCircle, FileUp } from 'lucide-react'
 import { Project } from '@shared/types'
 import { useProjectStore } from '../../stores/project.store'
 
@@ -19,6 +19,7 @@ export function ProjectScriptModal({ isOpen, onClose, project, onSaved }: Projec
   const [targetDuration, setTargetDuration] = useState(project.targetDuration ? String(project.targetDuration) : '60')
   const [aspectRatio, setAspectRatio] = useState(project.aspectRatio || '16:9')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isParsingScript, setIsParsingScript] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
@@ -34,6 +35,21 @@ export function ProjectScriptModal({ isOpen, onClose, project, onSaved }: Projec
   }, [project, isOpen])
 
   if (!isOpen) return null
+
+  const handleImportScriptFile = async () => {
+    try {
+      setIsParsingScript(true)
+      setError(null)
+      const parsed = await window.api.selectScriptFile()
+      if (!parsed) return
+      setScript(parsed.text)
+      setNotice(`Đã nạp thành công kịch bản từ tệp "${parsed.fileName}" (${parsed.format.toUpperCase()}).`)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Không thể đọc tệp kịch bản.')
+    } finally {
+      setIsParsingScript(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -129,12 +145,21 @@ export function ProjectScriptModal({ isOpen, onClose, project, onSaved }: Projec
 
           {/* Script / Storyboard */}
           <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="font-semibold text-slate-700 flex items-center gap-1.5">
+            <div className="flex items-center justify-between mb-1.5 gap-2">
+              <label className="font-semibold text-slate-700 flex items-center gap-1.5 text-xs">
                 <Sparkles size={14} className="text-amber-500" />
                 <span>Kịch bản phân cảnh / Nội dung chi tiết (Script)</span>
               </label>
-              <span className="text-[11px] text-slate-400">Dùng cho AI chấm điểm độ khớp kịch bản</span>
+              <button
+                type="button"
+                disabled={isSubmitting || isParsingScript}
+                onClick={handleImportScriptFile}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                title="Hỗ trợ các định dạng: PDF, DOCX, XLSX, TXT, JSON, CSV"
+              >
+                <FileUp size={13} />
+                <span>{isParsingScript ? 'Đang đọc tệp...' : 'Nhập tệp kịch bản (PDF, Word, Excel, TXT, JSON...)'}</span>
+              </button>
             </div>
             <textarea
               aria-label="Kịch bản phân cảnh chi tiết"
