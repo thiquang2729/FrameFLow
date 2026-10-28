@@ -16,7 +16,7 @@
 
 **FrameFlow** là ứng dụng desktop (Local-First) giải quyết triệt để vấn đề phản hồi hậu kỳ video rời rạc, thiếu chính xác và khó theo dõi. Với FrameFlow, mọi góp ý đều gắn liền với mốc thời gian (timestamp) và khung hình thực tế, kèm công cụ vẽ chú thích trực tiếp trên màn hình video.
 
-Ứng dụng hoạt động **100% offline**, lưu trữ toàn bộ dữ liệu dự án trên máy cục bộ bằng cơ sở dữ liệu SQLite (WebAssembly), đảm bảo tính bảo mật và tốc độ phản hồi tức thì.
+Các chức năng duyệt video và xuất gói hoạt động **offline**, lưu dữ liệu dự án cục bộ bằng SQLite (WebAssembly). Tính năng AI tùy chọn kết nối Antigravity qua CLIProxyAPI đi kèm và cần Internet; chỉ gửi câu hỏi khi người dùng bấm gửi.
 
 ---
 
@@ -57,9 +57,15 @@
   - `frames/`: Các frame gốc trích xuất từ video.
   - `annotated/`: Các hình ảnh kèm chú thích trực quan tương ứng.
 
-### 6. 🔒 Hoàn Toàn Cục Bộ & Bảo Mật (100% Local-First)
+### 6. 🔒 Dữ Liệu Dự Án Cục Bộ (Local-First)
 - Toàn bộ cơ sở dữ liệu (`project.db`) chạy trên nền **SQLite WebAssembly (`sql.js`)** độc lập.
 - Không cần tài khoản, không phụ thuộc dịch vụ đám mây, dữ liệu video và chú thích của bạn luôn nằm an toàn trên máy tính.
+
+### 7. Kết nối Antigravity qua CLIProxyAPI
+- Proxy tự chạy cùng ứng dụng và tự dừng khi thoát, không cần mở CLI riêng.
+- Vào **Kết nối AI** để đăng nhập Antigravity, lấy model và gửi câu hỏi kiểm tra.
+- Chưa tự gửi ảnh/video hoặc tự chỉnh sửa dự án. OAuth do CLIProxyAPI lưu riêng trong dữ liệu ứng dụng.
+- Hướng dẫn thiết lập, bảo mật và kiểm thử: [doc/AI-INTEGRATION.md](doc/AI-INTEGRATION.md).
 
 ---
 

@@ -7,6 +7,7 @@ import { SourceLibrary } from './pages/SourceLibrary'
 import { VersionList } from './pages/VersionList'
 import { ReviewWorkspace } from './pages/ReviewWorkspace'
 import { ExportPackage } from './pages/ExportPackage'
+import { AiConnection } from './pages/AiConnection'
 import { useProjectStore } from './stores/project.store'
 
 export default function App(): React.JSX.Element {
@@ -32,6 +33,7 @@ export default function App(): React.JSX.Element {
           {activeTab === 'versions' && <VersionList />}
           {activeTab === 'review' && <ReviewWorkspace />}
           {activeTab === 'export' && <ExportPackage />}
+          {activeTab === 'ai' && <AiConnection />}
         </main>
       </div>
 

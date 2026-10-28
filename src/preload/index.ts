@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC_CHANNELS } from '../shared/ipc-channels'
+import type { AiStatus, AiTestResult } from '../shared/types/ai'
 import {
   CreateCommentDTO,
   CreateProjectDTO,
@@ -11,6 +12,16 @@ import {
 } from '../shared/types'
 
 const api = {
+  ai: {
+    status: (): Promise<AiStatus> => ipcRenderer.invoke('ai:status'),
+    restart: (): Promise<AiStatus> => ipcRenderer.invoke('ai:restart'),
+    login: (): Promise<AiStatus> => ipcRenderer.invoke('ai:login'),
+    cancelLogin: (): Promise<void> => ipcRenderer.invoke('ai:cancel-login'),
+    models: (): Promise<string[]> => ipcRenderer.invoke('ai:models'),
+    selectModel: (model: string): Promise<void> => ipcRenderer.invoke('ai:select-model', model),
+    test: (model: string, prompt: string): Promise<AiTestResult> => ipcRenderer.invoke('ai:test', model, prompt),
+    cancelTest: (): Promise<void> => ipcRenderer.invoke('ai:cancel-test')
+  },
   // Dialogs
   selectDirectory: () => ipcRenderer.invoke(IPC_CHANNELS.SELECT_DIRECTORY),
   selectVideoFile: () => ipcRenderer.invoke(IPC_CHANNELS.SELECT_VIDEO_FILE),

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, protocol, net, Menu } from 'electron'
+import { app, BrowserWindow, protocol, net, Menu, shell } from 'electron'
 import { join } from 'path'
 import fs from 'fs'
 import { is } from '@electron-toolkit/utils'
@@ -8,11 +8,22 @@ import { ReviewService } from './services/review.service'
 import { SourceService } from './services/source.service'
 import { ExportService } from './services/export.service'
 import { registerIpcHandlers } from './ipc/register-ipc'
+import { AiService } from './services/ai.service'
+import { registerAiIpc } from './ipc/register-ai-ipc'
 
 // Completely disable native application menu on Windows to prevent flickering/resizing
 Menu.setApplicationMenu(null)
 
 let mainWindow: BrowserWindow | null = null
+let aiService: AiService | null = null
+let quitting = false
+
+// A second app instance must not overwrite the first instance's proxy config.
+if (!app.requestSingleInstanceLock()) app.quit()
+app.on('second-instance', () => {
+  if (mainWindow?.isMinimized()) mainWindow.restore()
+  mainWindow?.focus()
+})
 
 function createWindow(): void {
   const preloadPath = fs.existsSync(join(__dirname, '../preload/index.mjs'))
@@ -38,6 +49,8 @@ function createWindow(): void {
   // Completely strip native menu bar to eliminate any layout jitter
   mainWindow.removeMenu()
   mainWindow.setMenuBarVisibility(false)
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  mainWindow.webContents.on('will-navigate', (event) => event.preventDefault())
 
   mainWindow.on('ready-to-show', () => {
     mainWindow?.show()
@@ -53,6 +66,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  if (!app.hasSingleInstanceLock()) return
   // Register custom protocol for local files if needed
   protocol.handle('frameflow-media', (request) => {
     const filePath = decodeURIComponent(request.url.replace('frameflow-media://', ''))
@@ -65,6 +79,16 @@ app.whenReady().then(() => {
   const reviewService = new ReviewService(projectService)
   const sourceService = new SourceService(projectService)
   const exportService = new ExportService(projectService, reviewService, versionService)
+  const platformFolder = `${process.platform === 'win32' ? 'win' : process.platform === 'darwin' ? 'mac' : 'linux'}-${process.arch}`
+  aiService = new AiService({
+    dataDir: join(app.getPath('userData'), 'ai-proxy'),
+    binaryDir: app.isPackaged ? join(process.resourcesPath, 'cli-proxy') : join(app.getAppPath(), 'resources', 'cli-proxy', platformFolder),
+    supervisorPath: app.isPackaged ? join(process.resourcesPath, 'proxy-supervisor.cjs') : join(app.getAppPath(), 'resources', 'proxy-supervisor.cjs'),
+    nodePath: process.execPath,
+    openExternal: (url) => shell.openExternal(url)
+  })
+  registerAiIpc(aiService)
+  void aiService.start()
 
   // Register IPC endpoints
   registerIpcHandlers(
@@ -80,6 +104,13 @@ app.whenReady().then(() => {
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+})
+
+app.on('before-quit', (event) => {
+  if (quitting || !aiService) return
+  event.preventDefault()
+  quitting = true
+  void aiService.stop().finally(() => app.quit())
 })
 
 app.on('window-all-closed', () => {
