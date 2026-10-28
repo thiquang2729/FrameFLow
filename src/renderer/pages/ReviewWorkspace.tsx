@@ -177,6 +177,101 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
   const [editingId, setEditingId] = useState<string | null>(null)
   const [seeking, setSeeking] = useState(false)
   const [playbackRate, setPlaybackRate] = useState(1)
+  const [leftWidth, setLeftWidth] = useState(() => {
+    try {
+      const saved = localStorage.getItem('frameflow_review_left_width')
+      const num = saved ? Number(saved) : 320
+      return Number.isFinite(num) && num >= 220 && num <= 600 ? num : 320
+    } catch {
+      return 320
+    }
+  })
+  const [isResizingLeft, setIsResizingLeft] = useState(false)
+
+  const [rightWidth, setRightWidth] = useState(() => {
+    try {
+      const saved = localStorage.getItem('frameflow_review_right_width')
+      const num = saved ? Number(saved) : 320
+      return Number.isFinite(num) && num >= 260 && num <= 600 ? num : 320
+    } catch {
+      return 320
+    }
+  })
+  const [isResizingRight, setIsResizingRight] = useState(false)
+
+  useEffect(() => {
+    return () => {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [])
+
+  const handleLeftResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    setIsResizingLeft(true)
+    const startX = e.clientX
+    const startWidth = leftWidth
+
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      const delta = moveEvent.clientX - startX
+      const maxW = Math.max(360, Math.min(640, window.innerWidth - 450))
+      const newWidth = Math.min(maxW, Math.max(220, Math.round(startWidth + delta)))
+      setLeftWidth(newWidth)
+    }
+
+    const onPointerUp = (upEvent: PointerEvent) => {
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      setIsResizingLeft(false)
+      const finalDelta = upEvent.clientX - startX
+      const maxW = Math.max(360, Math.min(640, window.innerWidth - 450))
+      const finalWidth = Math.min(maxW, Math.max(220, Math.round(startWidth + finalDelta)))
+      try {
+        localStorage.setItem('frameflow_review_left_width', String(finalWidth))
+      } catch {}
+    }
+
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerUp)
+  }
+
+  const handleRightResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    setIsResizingRight(true)
+    const startX = e.clientX
+    const startWidth = rightWidth
+
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      const delta = startX - moveEvent.clientX
+      const maxW = Math.max(360, Math.min(640, window.innerWidth - 450))
+      const newWidth = Math.min(maxW, Math.max(260, Math.round(startWidth + delta)))
+      setRightWidth(newWidth)
+    }
+
+    const onPointerUp = (upEvent: PointerEvent) => {
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      setIsResizingRight(false)
+      const finalDelta = startX - upEvent.clientX
+      const maxW = Math.max(360, Math.min(640, window.innerWidth - 450))
+      const finalWidth = Math.min(maxW, Math.max(260, Math.round(startWidth + finalDelta)))
+      try {
+        localStorage.setItem('frameflow_review_right_width', String(finalWidth))
+      } catch {}
+    }
+
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerUp)
+  }
+
   const baseline = useRef('')
   const annotations = history[historyIndex]
   const changeAnnotations = (next: Annotation[]) => {
@@ -451,7 +546,10 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
     <>
       {error && <p role="alert" className="p-3 text-xs text-red-700 bg-red-50">{error}</p>}
       <div className="flex-1 flex min-h-0 overflow-x-auto">
-        <aside className="w-80 shrink-0 border-r border-slate-200 bg-white flex flex-col">
+        <aside
+          style={{ width: `${leftWidth}px` }}
+          className="shrink-0 border-r border-slate-200 bg-white flex flex-col relative"
+        >
           <div className="p-4 border-b space-y-3"><h2 className="text-sm font-bold">Bình luận ({comments.length})</h2>
             <select aria-label="Lọc trạng thái bình luận" className={inputClass} value={filter} onChange={(event) => setFilter(event.target.value)}>
               <option value="ALL">Tất cả trạng thái</option>{Object.entries(statuses).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -495,6 +593,25 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
             })}
           </div>
         </aside>
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Kéo để điều chỉnh độ rộng danh sách bình luận (nhấp đúp để đặt lại mặc định)"
+          title="Kéo để thay đổi kích thước · Nhấp đúp để đặt lại mặc định (320px)"
+          onPointerDown={handleLeftResizeStart}
+          onDoubleClick={() => {
+            setLeftWidth(320)
+            try {
+              localStorage.setItem('frameflow_review_left_width', '320')
+            } catch {}
+          }}
+          className={`w-1 cursor-col-resize relative z-20 transition-colors shrink-0 group select-none ${
+            isResizingLeft ? 'bg-blue-500' : 'bg-transparent hover:bg-blue-500/40'
+          }`}
+          style={{ marginLeft: '-1px', marginRight: '-1px' }}
+        >
+          <div className={`absolute inset-y-0 -left-1.5 -right-1.5 cursor-col-resize ${isResizingLeft ? 'bg-blue-500/20' : 'group-hover:bg-blue-500/10'}`} />
+        </div>
         <main className="flex-1 min-w-[320px] flex flex-col">
           <div className="p-2.5 sm:p-3 bg-white border-b border-slate-200 shrink-0 space-y-2" aria-label="Công cụ vẽ trên video">
             <div className="flex flex-wrap justify-between items-center gap-2 text-xs">
@@ -616,7 +733,29 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
             onPickComment={pickComment}
           />
         </main>
-        <aside className="w-80 shrink-0 overflow-y-auto border-l border-slate-200 bg-white p-4 space-y-4">
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Kéo để điều chỉnh độ rộng ghi chú duyệt (nhấp đúp để đặt lại mặc định)"
+          title="Kéo để thay đổi kích thước · Nhấp đúp để đặt lại mặc định (320px)"
+          onPointerDown={handleRightResizeStart}
+          onDoubleClick={() => {
+            setRightWidth(320)
+            try {
+              localStorage.setItem('frameflow_review_right_width', '320')
+            } catch {}
+          }}
+          className={`w-1 cursor-col-resize relative z-20 transition-colors shrink-0 group select-none ${
+            isResizingRight ? 'bg-blue-500' : 'bg-transparent hover:bg-blue-500/40'
+          }`}
+          style={{ marginLeft: '-1px', marginRight: '-1px' }}
+        >
+          <div className={`absolute inset-y-0 -left-1.5 -right-1.5 cursor-col-resize ${isResizingRight ? 'bg-blue-500/20' : 'group-hover:bg-blue-500/10'}`} />
+        </div>
+        <aside
+          style={{ width: `${rightWidth}px` }}
+          className="shrink-0 overflow-y-auto border-l border-slate-200 bg-white p-4 space-y-4"
+        >
           <h2 className="font-bold text-sm">Ghi chú duyệt</h2>
           {draftTime !== null ? <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void saveComment() }}>
             <p className="font-mono text-xs">{formatTime(draftTime)} · Frame ~{Math.round(draftTime * (version.fps || 30))}</p>
