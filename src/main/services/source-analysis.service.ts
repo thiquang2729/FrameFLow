@@ -38,8 +38,14 @@ export class SourceAnalysisService {
     return { db, source, project }
   }
 
-  private brief(project: { description?: string; targetPlatform?: string; targetDuration?: number; aspectRatio?: string }): string {
-    return JSON.stringify({ description: project.description || '', targetPlatform: project.targetPlatform || null, targetDuration: project.targetDuration || null, aspectRatio: project.aspectRatio || null })
+  private brief(project: { description?: string; script?: string; targetPlatform?: string; targetDuration?: number; aspectRatio?: string }): string {
+    return JSON.stringify({
+      description: project.description || '',
+      script: project.script || '',
+      targetPlatform: project.targetPlatform || null,
+      targetDuration: project.targetDuration || null,
+      aspectRatio: project.aspectRatio || null
+    })
   }
 
   async environment(): Promise<SourceAnalysisEnvironment> {

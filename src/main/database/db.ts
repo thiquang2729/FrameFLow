@@ -55,6 +55,7 @@ export class DatabaseManager {
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         description TEXT,
+        script TEXT,
         target_platform TEXT,
         target_duration REAL,
         aspect_ratio TEXT,
@@ -161,6 +162,10 @@ export class DatabaseManager {
     // Additive migration for projects created before persistent SRC thumbnails.
     if (!this.query<{ name: string }>('PRAGMA table_info(source_assets)').some((column) => column.name === 'thumbnail_path')) {
       this.db.run('ALTER TABLE source_assets ADD COLUMN thumbnail_path TEXT')
+    }
+    // Additive migration for project script (kịch bản phân cảnh).
+    if (!this.query<{ name: string }>('PRAGMA table_info(projects)').some((column) => column.name === 'script')) {
+      this.db.run('ALTER TABLE projects ADD COLUMN script TEXT')
     }
     // Versioned, additive module migration; existing review/source rows are preserved.
     this.db.run('CREATE TABLE IF NOT EXISTS module_migrations (name TEXT PRIMARY KEY, version INTEGER NOT NULL)')

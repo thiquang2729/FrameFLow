@@ -141,6 +141,10 @@
 .slib-detail-section--issues h3 > svg, .slib-detail-section--use h3 > svg { color: #df9a00; }
 .slib-icon-button { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 25px; height: 25px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: #61718c; cursor: pointer; }
 .slib-icon-button:hover { background: #edf3ff; color: var(--slib-blue); }
+.slib-script-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 6px; background: #fef7e7; border: 1px solid #fce3b8; color: #85550a; font-size: 10px; font-weight: 600; margin: 4px 0 10px; }
+.slib-script-hint-button { display: inline-flex; align-items: center; gap: 6px; width: 100%; padding: 6px 9px; border-radius: 6px; background: #f0f6ff; border: 1px dashed #bfdbfe; color: #1e40af; font-size: 10px; font-weight: 500; cursor: pointer; margin: 4px 0 10px; text-align: left; transition: all 0.15s ease; }
+.slib-script-hint-button:hover { background: #e0edff; border-color: #93c5fd; }
+.slib-badge-script { display: inline-block; padding: 1px 5px; border-radius: 3px; background: #eef2ff; color: #3730a3; font-weight: 700; font-size: 9.5px; margin-right: 5px; border: 1px solid #e0e7ff; }
 .slib-summary { margin: 0; color: #4a5a76; font-size: 11px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
 .slib-detail-note { margin: 8px 0 0; font-size: 10px; color: #6a5c40; line-height: 1.7; }
 .slib-quality-score { padding: 1px 7px; border-radius: 5px; background: #dcf3df; color: #255c34; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }

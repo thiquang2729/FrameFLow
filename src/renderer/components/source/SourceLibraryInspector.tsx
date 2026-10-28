@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { BadgeCheck, BrainCircuit, Copy, Lightbulb, Maximize2, Play, Plus, Tags, TriangleAlert, X } from 'lucide-react'
+import { BadgeCheck, BrainCircuit, Copy, Lightbulb, Maximize2, Play, Plus, Sparkles, Tags, TriangleAlert, X } from 'lucide-react'
 import type { Project, SourceAsset } from '@shared/types'
 import type { SourceAnalysisRun, SourceScores } from '../../../shared/types/source-analysis'
 import { isSourceImage } from '@shared/media'
@@ -7,14 +7,18 @@ import { localFileUrl } from '../../lib/source-media'
 import { sourceTime } from './SourceAnalysisPanel'
 import { issueLabels, mediaDuration, mediaResolution, mediaSize, scoreTone, tagTone } from './source-library-utils'
 
-const qualityRows: [keyof Pick<SourceScores, 'sharpness' | 'stability' | 'exposure' | 'composition' | 'editorial'>, string][] = [
-  ['sharpness', 'Độ sắc nét'], ['stability', 'Ổn định hình ảnh'], ['exposure', 'Phơi sáng'], ['composition', 'Bố cục'], ['editorial', 'Giá trị biên tập']
-]
-
-export function SourceLibraryInspector({ project, source, onClose, onOpenWorkspace, onRelink, onAnalysisChange }: {
+export function SourceLibraryInspector({ project, source, onClose, onOpenWorkspace, onRelink, onAnalysisChange, onOpenScript }: {
   project: Project; source: SourceAsset; onClose?: () => void; onOpenWorkspace: () => void;
-  onRelink: () => Promise<void>; onAnalysisChange: () => Promise<void>
+  onRelink: () => Promise<void>; onAnalysisChange: () => Promise<void>; onOpenScript?: () => void
 }): React.JSX.Element {
+  const hasScript = Boolean(project.script?.trim())
+  const qualityRows: [keyof Pick<SourceScores, 'sharpness' | 'stability' | 'exposure' | 'composition' | 'editorial'>, string][] = [
+    ['sharpness', 'Độ sắc nét'],
+    ['stability', 'Ổn định hình ảnh'],
+    ['exposure', 'Phơi sáng'],
+    ['composition', 'Bố cục'],
+    ['editorial', hasScript ? 'Phù hợp kịch bản' : 'Giá trị biên tập']
+  ]
   const [runs, setRuns] = useState<SourceAnalysisRun[]>([])
   const [segmentId, setSegmentId] = useState('')
   const [loading, setLoading] = useState(true)
@@ -102,6 +106,25 @@ export function SourceLibraryInspector({ project, source, onClose, onOpenWorkspa
     {run?.review === 'REJECTED' && <p className="slib-notice slib-notice--warning">Bạn đã bác bỏ kết quả này. Điểm không được dùng để lọc clip.</p>}
 
     {!image && <>
+      {hasScript ? (
+        <div className="slib-script-badge" title="AI đối chiếu và chấm điểm dựa trên kịch bản phân cảnh của dự án">
+          <Sparkles size={12} className="text-amber-500" />
+          <span>Đánh giá theo kịch bản</span>
+          {onOpenScript && (
+            <button type="button" className="slib-text-button" style={{ marginLeft: 6, fontSize: 10 }} onClick={onOpenScript}>
+              (Xem / sửa kịch bản)
+            </button>
+          )}
+        </div>
+      ) : (
+        onOpenScript && (
+          <button type="button" className="slib-script-hint-button" onClick={onOpenScript}>
+            <Sparkles size={12} />
+            <span>Thêm kịch bản để AI chấm độ khớp phân cảnh</span>
+          </button>
+        )
+      )}
+
       <section className="slib-detail-section"><header><h3><BrainCircuit size={17} aria-hidden="true" />Tóm tắt AI</h3>{run && <button type="button" className="slib-icon-button" aria-label="Sao chép tóm tắt AI" onClick={() => void copy()}><Copy size={14} aria-hidden="true" /></button>}</header>
         <p className="slib-summary">{loading ? 'Đang tải đánh giá...' : run?.summary || (latest?.state === 'RUNNING' ? 'AI đang phân tích video.' : 'Chưa có đánh giá AI.')}</p>
         {latest && ['FAILED', 'CANCELLED', 'INTERRUPTED'].includes(latest.state) && <p className="slib-detail-note" role="status">{latest.error}</p>}
@@ -121,7 +144,14 @@ export function SourceLibraryInspector({ project, source, onClose, onOpenWorkspa
         {run?.issues.length ? <div className="slib-issue-list">{run.issues.map((issue) => <button type="button" key={issue.id} disabled={run.fileChanged} onClick={() => seek(issue.startTime)} title={issue.evidence}><span className="slib-issue-meta">{sourceTime(issue.startTime)} · {issueLabels[issue.type]}<span data-severity={issue.severity}>{issue.severity}</span></span><span>{issue.description}</span></button>)}</div> : <p className="slib-summary">{run ? 'AI không ghi nhận vấn đề trong đoạn đã gửi.' : 'Chưa có dữ liệu.'}</p>}
       </section>
 
-      <section className="slib-detail-section slib-detail-section--use"><header><h3><Lightbulb size={17} aria-hidden="true" />Cách dùng tốt nhất</h3></header><p className="slib-summary">{segment?.recommendedUse || 'Chưa có gợi ý sử dụng.'}</p>{segment && <button type="button" className="slib-text-button" disabled={run?.fileChanged} onClick={() => seek(segment.startTime)}>Xem đoạn {sourceTime(segment.startTime)}–{sourceTime(segment.endTime)}</button>}</section>
+      <section className="slib-detail-section slib-detail-section--use">
+        <header><h3><Lightbulb size={17} aria-hidden="true" />Cách dùng tốt nhất</h3></header>
+        <p className="slib-summary">
+          {hasScript && segment?.recommendedUse && <span className="slib-badge-script">Khớp kịch bản:</span>}
+          {segment?.recommendedUse || 'Chưa có gợi ý sử dụng.'}
+        </p>
+        {segment && <button type="button" className="slib-text-button" disabled={run?.fileChanged} onClick={() => seek(segment.startTime)}>Xem đoạn {sourceTime(segment.startTime)}–{sourceTime(segment.endTime)}</button>}
+      </section>
 
       <section className="slib-detail-section"><header><h3><Tags size={17} aria-hidden="true" />Thẻ AI & của bạn</h3><button type="button" className="slib-add-tag" disabled={!run} title={!run ? 'Cần có một kết quả phân tích trước khi thêm thẻ tại đây.' : 'Chỉnh sửa thẻ của bạn'} onClick={() => { setUserTags(run?.userTags.join(', ') || ''); setEditingTags((value) => !value) }}><Plus size={12} aria-hidden="true" />Thêm thẻ</button></header>
         {visibleTags.length ? <div className="slib-tags">{visibleTags.map((tag) => <span key={tag} data-tone={tagTone(tag)} title={run?.userTags.includes(tag) ? 'Tag của bạn' : 'Tag AI'}>{tag}</span>)}</div> : <p className="slib-summary">Chưa có thẻ.</p>}

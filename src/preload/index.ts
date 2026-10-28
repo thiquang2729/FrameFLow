@@ -5,6 +5,7 @@ import type { AnalysisReview, SourceAnalysisEnvironment, SourceAnalysisOverview,
 import {
   CreateCommentDTO,
   CreateProjectDTO,
+  UpdateProjectDTO,
   CreateRevisionPackageDTO,
   CreateVersionDTO,
   ImportSourceDTO,
@@ -44,6 +45,8 @@ const api = {
   listProjects: () => ipcRenderer.invoke(IPC_CHANNELS.PROJECT_LIST),
   getProject: (projectId: string) => ipcRenderer.invoke(IPC_CHANNELS.PROJECT_GET, projectId),
   createProject: (dto: CreateProjectDTO) => ipcRenderer.invoke(IPC_CHANNELS.PROJECT_CREATE, dto),
+  updateProject: (projectId: string, dto: UpdateProjectDTO) =>
+    ipcRenderer.invoke(IPC_CHANNELS.PROJECT_UPDATE, { projectId, dto }),
   deleteProject: (projectId: string) => ipcRenderer.invoke(IPC_CHANNELS.PROJECT_DELETE, projectId),
   getProjectStats: (projectId: string) => ipcRenderer.invoke(IPC_CHANNELS.PROJECT_STATS, projectId),
 

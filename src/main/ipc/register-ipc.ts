@@ -66,6 +66,10 @@ export function registerIpcHandlers(
     return projectService.createProject(dto)
   })
 
+  ipcMain.handle(IPC_CHANNELS.PROJECT_UPDATE, async (_, { projectId, dto }: { projectId: string; dto: import('@shared/types').UpdateProjectDTO }) => {
+    return projectService.updateProject(projectId, dto)
+  })
+
   ipcMain.handle(IPC_CHANNELS.PROJECT_DELETE, async (_, projectId: string) => {
     return projectService.deleteProject(projectId)
   })

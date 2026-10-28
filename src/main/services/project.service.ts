@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { ulid } from 'ulid'
-import { CreateProjectDTO, Project, ProjectStats } from '@shared/types'
+import { CreateProjectDTO, Project, ProjectStats, UpdateProjectDTO } from '@shared/types'
 import { DatabaseManager } from '../database/db'
 
 export class ProjectService {
@@ -88,6 +88,7 @@ export class ProjectService {
       id,
       name: dto.name.trim(),
       description: dto.description || '',
+      script: dto.script || '',
       targetPlatform: dto.targetPlatform || 'TikTok',
       targetDuration: dto.targetDuration || 60,
       aspectRatio: dto.aspectRatio || '9:16',
@@ -103,12 +104,13 @@ export class ProjectService {
     await db.init()
 
     db.run(
-      `INSERT INTO projects (id, name, description, target_platform, target_duration, aspect_ratio, status, project_path, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO projects (id, name, description, script, target_platform, target_duration, aspect_ratio, status, project_path, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         project.id,
         project.name,
         project.description,
+        project.script,
         project.targetPlatform,
         project.targetDuration,
         project.aspectRatio,
@@ -131,7 +133,72 @@ export class ProjectService {
 
   public async getProject(projectId: string): Promise<Project | null> {
     const list = this.getProjects()
-    return list.find((p) => p.id === projectId) || null
+    const found = list.find((p) => p.id === projectId)
+    if (!found) return null
+    try {
+      const db = await this.getDb(projectId)
+      const row = db.get<Record<string, unknown>>('SELECT * FROM projects WHERE id = ?', [projectId])
+      if (row) {
+        return {
+          id: String(row.id),
+          name: String(row.name),
+          description: typeof row.description === 'string' ? row.description : found.description || '',
+          script: typeof row.script === 'string' ? row.script : found.script || '',
+          targetPlatform: typeof row.target_platform === 'string' ? row.target_platform : found.targetPlatform,
+          targetDuration: typeof row.target_duration === 'number' ? row.target_duration : found.targetDuration,
+          aspectRatio: typeof row.aspect_ratio === 'string' ? row.aspect_ratio : found.aspectRatio,
+          status: (typeof row.status === 'string' ? row.status : found.status) as Project['status'],
+          projectPath: found.projectPath,
+          createdAt: typeof row.created_at === 'string' ? row.created_at : found.createdAt,
+          updatedAt: typeof row.updated_at === 'string' ? row.updated_at : found.updatedAt
+        }
+      }
+    } catch {
+      // fallback to registry
+    }
+    return found
+  }
+
+  public async updateProject(projectId: string, dto: UpdateProjectDTO): Promise<Project> {
+    const projects = this.getProjects()
+    const index = projects.findIndex((p) => p.id === projectId)
+    if (index === -1) throw new Error(`Project ${projectId} not found`)
+
+    const existing = projects[index]
+    const updated: Project = {
+      ...existing,
+      name: dto.name !== undefined ? dto.name.trim() : existing.name,
+      description: dto.description !== undefined ? dto.description : existing.description,
+      script: dto.script !== undefined ? dto.script : existing.script,
+      targetPlatform: dto.targetPlatform !== undefined ? dto.targetPlatform : existing.targetPlatform,
+      targetDuration: dto.targetDuration !== undefined ? dto.targetDuration : existing.targetDuration,
+      aspectRatio: dto.aspectRatio !== undefined ? dto.aspectRatio : existing.aspectRatio,
+      status: dto.status !== undefined ? dto.status : existing.status,
+      updatedAt: new Date().toISOString()
+    }
+
+    // Update in database
+    const db = await this.getDb(projectId)
+    db.run(
+      `UPDATE projects SET name = ?, description = ?, script = ?, target_platform = ?, target_duration = ?, aspect_ratio = ?, status = ?, updated_at = ? WHERE id = ?`,
+      [
+        updated.name,
+        updated.description || '',
+        updated.script || '',
+        updated.targetPlatform || null,
+        updated.targetDuration || null,
+        updated.aspectRatio || null,
+        updated.status,
+        updated.updatedAt,
+        projectId
+      ]
+    )
+
+    // Update in registry
+    projects[index] = updated
+    this.saveRegistry(projects)
+
+    return updated
   }
 
   public async getProjectStats(projectId: string): Promise<ProjectStats> {

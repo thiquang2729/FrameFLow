@@ -43,7 +43,7 @@ export function SourceAnalysisPanel({ projectId, sourceId, run, onSeek, onRefres
   if (run.state !== 'COMPLETED') return <div className="src-analysis-empty" role="status">{run.state === 'RUNNING' ? 'Đang chuẩn bị hoặc gửi video tới AI...' : run.error || 'Lần phân tích chưa hoàn tất.'}</div>
 
   return <div className="src-analysis-results">
-    {run.stale && <p className="src-notice src-notice--warning" role="status">{run.fileChanged ? 'File gốc đã thay đổi hoặc không còn truy cập được. Kết quả này thuộc bản trước.' : run.criteriaChanged ? 'Tiêu chí đã đổi: bỏ âm thanh và không trừ điểm do xoay 90°. Hãy phân tích lại để cập nhật điểm.' : 'Brief dự án đã thay đổi. Điểm editorial cần được đánh giá lại.'}</p>}
+    {run.stale && <p className="src-notice src-notice--warning" role="status">{run.fileChanged ? 'File gốc đã thay đổi hoặc không còn truy cập được. Kết quả này thuộc bản trước.' : run.criteriaChanged ? 'Tiêu chí đã đổi: bỏ âm thanh và không trừ điểm do xoay 90°. Hãy phân tích lại để cập nhật điểm.' : 'Kịch bản / Brief dự án đã thay đổi. Điểm phù hợp kịch bản (editorial) cần được đánh giá lại.'}</p>}
     <div className="src-result-summary"><h3>Nội dung</h3><p>{run.summary}</p></div>
     <p className="src-result-provenance">{run.mediaNote}</p>
     {run.tags.length > 0 && <div className="src-tags" aria-label="Tag AI">{run.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
@@ -52,7 +52,7 @@ export function SourceAnalysisPanel({ projectId, sourceId, run, onSeek, onRefres
       <div className="src-segment-list">{run.segments.map((segment) => <article key={segment.id} className="src-segment">
         <button type="button" className="src-time-link" onClick={() => onSeek(segment.startTime)} disabled={run.fileChanged}>{sourceTime(segment.startTime)} → {sourceTime(segment.endTime)}</button>
         <p>{segment.summary}</p>
-        <div className="src-score-pair"><span>Kỹ thuật <strong>{scoreLabel(segment.scores.technical)}<small>/10</small></strong></span><span>Biên tập <strong>{scoreLabel(segment.scores.editorial)}<small>/10</small></strong></span></div>
+        <div className="src-score-pair"><span>Kỹ thuật <strong>{scoreLabel(segment.scores.technical)}<small>/10</small></strong></span><span>Phù hợp kịch bản <strong>{scoreLabel(segment.scores.editorial)}<small>/10</small></strong></span></div>
         <dl className="src-score-components">{componentLabels.map(([key, label]) => <div key={key}><dt>{label}</dt><dd>{scoreLabel(segment.scores[key])}</dd></div>)}</dl>
         <p className="src-score-rationale">{segment.scores.rationale}</p>
         <div className="src-segment-use"><span>{segment.shotType}</span><p>{segment.recommendedUse}</p></div>

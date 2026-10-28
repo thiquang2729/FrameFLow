@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react'
+import { FileText, Sparkles } from 'lucide-react'
 import { EditVersion, Project, ProjectStats, ReviewComment } from '@shared/types'
 import { useProjectStore } from '../stores/project.store'
 import { localFileUrl } from '../lib/source-media'
+import { ProjectScriptModal } from '../components/project/ProjectScriptModal'
 
 const buttonClass = 'px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium hover:bg-slate-50 disabled:opacity-40'
 const statusLabels: Record<string, string> = { PLANNING: 'Lên kế hoạch', INGESTING: 'Nhập tư liệu', EDITING: 'Đang dựng', REVIEW: 'Đang duyệt', REVIEWING: 'Đang duyệt', FINAL: 'Hoàn tất' }
@@ -22,6 +24,7 @@ function ProjectDashboard({ project }: { project: Project }): React.ReactElement
   const [error, setError] = useState('')
   const [mediaError, setMediaError] = useState('')
   const [reload, setReload] = useState(0)
+  const [scriptModalOpen, setScriptModalOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -68,7 +71,81 @@ function ProjectDashboard({ project }: { project: Project }): React.ReactElement
           </section>
         </div>
       </>}
-      <section className="p-4 bg-white border rounded-2xl space-y-3 text-xs"><h2 className="font-bold text-sm">Thông tin dự án</h2><p className="whitespace-pre-wrap break-words text-slate-600">{project.description || 'Chưa có mô tả dự án.'}</p><p>Trạng thái: {statusLabels[project.status] || project.status}</p><p>Tạo: {new Date(project.createdAt).toLocaleString('vi-VN')}</p><p>Cập nhật thông tin: {new Date(project.updatedAt).toLocaleString('vi-VN')}</p><p className="break-all text-slate-500">Lưu trên máy: {project.projectPath}</p></section>
+      <section className="p-5 bg-white border rounded-2xl space-y-4 text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div>
+            <h2 className="font-bold text-sm text-slate-800 flex items-center gap-2">
+              <FileText size={16} className="text-blue-600" />
+              <span>Kịch bản & Mục tiêu dự án</span>
+            </h2>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Kịch bản được dùng để AI chấm điểm độ phù hợp (Editorial score) của các clip nguồn trong thư viện SRC.
+            </p>
+          </div>
+          <button
+            type="button"
+            className={`${buttonClass} flex items-center gap-1.5 bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 transition-colors font-semibold`}
+            onClick={() => setScriptModalOpen(true)}
+          >
+            <Sparkles size={14} className="text-amber-500" />
+            <span>Xem / Sửa kịch bản & Brief</span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2 bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+            <h3 className="font-semibold text-slate-700">Mục tiêu & Định hướng</h3>
+            <p className="whitespace-pre-wrap break-words text-slate-600 leading-relaxed">
+              {project.description || 'Chưa có mô tả định hướng.'}
+            </p>
+            <div className="flex flex-wrap gap-2 pt-2 text-[11px] text-slate-500">
+              <span className="px-2 py-0.5 bg-white rounded border border-slate-200 font-medium">Nền tảng: {project.targetPlatform || 'Chưa đặt'}</span>
+              <span className="px-2 py-0.5 bg-white rounded border border-slate-200 font-medium">Tỉ lệ: {project.aspectRatio || '16:9'}</span>
+              <span className="px-2 py-0.5 bg-white rounded border border-slate-200 font-medium">Thời lượng: {project.targetDuration ? `${project.targetDuration}s` : 'Chưa đặt'}</span>
+            </div>
+          </div>
+
+          <div className="space-y-2 bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+            <h3 className="font-semibold text-slate-700 flex items-center gap-1.5">
+              <span>Kịch bản phân cảnh</span>
+              {project.script ? (
+                <span className="px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-700 text-[10px] font-semibold">Đã có</span>
+              ) : (
+                <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-700 text-[10px] font-semibold">Chưa có</span>
+              )}
+            </h3>
+            {project.script ? (
+              <pre className="whitespace-pre-wrap break-words text-slate-700 font-mono text-[11px] max-h-36 overflow-y-auto leading-relaxed bg-white p-2.5 rounded-lg border border-slate-200/60">
+                {project.script}
+              </pre>
+            ) : (
+              <div className="text-slate-400 p-3 bg-white rounded-lg border border-dashed border-slate-200 text-center space-y-1">
+                <p>Chưa nhập kịch bản phân cảnh chi tiết.</p>
+                <button
+                  type="button"
+                  onClick={() => setScriptModalOpen(true)}
+                  className="text-blue-600 font-medium hover:underline text-[11px]"
+                >
+                  + Nhập kịch bản để AI đối chiếu footage
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="pt-2 text-[11px] text-slate-400 flex flex-wrap gap-x-4 gap-y-1 border-t border-slate-100">
+          <span>Trạng thái: <strong>{statusLabels[project.status] || project.status}</strong></span>
+          <span>Tạo: {new Date(project.createdAt).toLocaleDateString('vi-VN')}</span>
+          <span>Cập nhật: {new Date(project.updatedAt).toLocaleDateString('vi-VN')}</span>
+          <span className="break-all">Lưu: {project.projectPath}</span>
+        </div>
+      </section>
+
+      <ProjectScriptModal
+        isOpen={scriptModalOpen}
+        onClose={() => setScriptModalOpen(false)}
+        project={project}
+      />
     </div>
   )
 }

@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Film, Folder, LayoutGrid, List, Search, Upload, X, MoreVertical, Plus, SlidersHorizontal, ChevronDown, Trash2 } from 'lucide-react'
+import { Film, Folder, LayoutGrid, List, Search, Upload, X, MoreVertical, Plus, SlidersHorizontal, ChevronDown, Trash2, FileText } from 'lucide-react'
 import { Project, SourceAsset } from '@shared/types'
 import { isSourceImage } from '@shared/media'
 import { useProjectStore } from '../stores/project.store'
 import { localFileUrl, probeSource } from '../lib/source-media'
 import { SourceWorkspace } from '../components/source/SourceWorkspace'
 import { SourceLibraryInspector } from '../components/source/SourceLibraryInspector'
+import { ProjectScriptModal } from '../components/project/ProjectScriptModal'
 import { issueLabels, mediaResolution, scoreTone, tagTone, usableAnalysis } from '../components/source/source-library-utils'
 import type { SourceAnalysisOverview } from '../../shared/types/source-analysis'
 import './source-library.css'
@@ -53,10 +54,10 @@ function ProjectSources({ project }: { project: Project }): React.ReactElement {
   const [issueFilter, setIssueFilter] = useState('')
   const [shotFilter, setShotFilter] = useState('')
   const [durationFilter, setDurationFilter] = useState('')
+  const [scriptModalOpen, setScriptModalOpen] = useState(false)
   const lifetime = useRef<AbortController>(new AbortController())
   const importingRef = useRef(false)
   const removingRef = useRef(false)
-  const analysisLoading = useRef(false)
   const root = useRef<HTMLDivElement>(null)
   const browserRef = useRef<HTMLElement>(null)
   const [marquee, setMarquee] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
@@ -66,18 +67,22 @@ function ProjectSources({ project }: { project: Project }): React.ReactElement {
   const availableTags = [...new Set(analyses.filter(usableAnalysis).flatMap((item) => item.tags))].sort((a, b) => a.localeCompare(b, 'vi'))
   const availableShots = [...new Set(analyses.filter(usableAnalysis).flatMap((item) => item.shotTypes))].sort((a, b) => a.localeCompare(b, 'vi'))
   const refreshAnalysis = useCallback(async () => {
-    if (analysisLoading.current) return
-    const signal = lifetime.current.signal
-    analysisLoading.current = true
     try {
       const next = await window.api.sourceAnalysis.overview(project.id)
-      if (!signal.aborted) setAnalyses(next)
-    } finally { analysisLoading.current = false }
+      if (!lifetime.current.signal.aborted) setAnalyses(next)
+      return next
+    } catch (err) {
+      if (!lifetime.current.signal.aborted) setError(err instanceof Error ? err.message : 'Không đọc được đánh giá SRC.')
+    }
   }, [project.id])
   const refreshSources = useCallback(async () => {
-    const signal = lifetime.current.signal
-    const next: SourceAsset[] = await window.api.listSources(project.id)
-    if (!signal.aborted) setSources(next)
+    try {
+      const next: SourceAsset[] = await window.api.listSources(project.id)
+      if (!lifetime.current.signal.aborted) setSources(next)
+      return next
+    } catch {
+      if (!lifetime.current.signal.aborted) setError('Không thể tải thư viện. Hãy mở lại màn hình SRC.')
+    }
   }, [project.id])
   const relink = async (sourceId: string) => {
     if (await window.api.sourceAnalysis.relink(project.id, sourceId)) await Promise.all([refreshSources(), refreshAnalysis()])
@@ -125,18 +130,37 @@ function ProjectSources({ project }: { project: Project }): React.ReactElement {
   useEffect(() => {
     const controller = new AbortController()
     lifetime.current = controller
-    window.api.listSources(project.id).then((list: SourceAsset[]) => {
-      if (controller.signal.aborted) return
-      setSources(list)
-    }).catch(() => { if (!controller.signal.aborted) setError('Không thể tải thư viện. Hãy mở lại màn hình SRC.') })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false) })
-    return () => controller.abort()
+    setLoading(true)
+    setError('')
+
+    void Promise.all([
+      window.api.listSources(project.id).then((list: SourceAsset[]) => {
+        if (!controller.signal.aborted) setSources(list)
+      }),
+      window.api.sourceAnalysis.overview(project.id).then((overviewList: SourceAnalysisOverview[]) => {
+        if (!controller.signal.aborted) setAnalyses(overviewList)
+      })
+    ]).catch((err) => {
+      if (!controller.signal.aborted) {
+        setError(err instanceof Error ? err.message : 'Không thể tải thư viện. Hãy mở lại màn hình SRC.')
+      }
+    }).finally(() => {
+      if (!controller.signal.aborted) setLoading(false)
+    })
+
+    return () => {
+      controller.abort()
+    }
   }, [project.id])
 
+  const hasRunningAnalysis = analyses.some((item) => item.latestState === 'RUNNING')
   useEffect(() => {
-    const signal = lifetime.current.signal
-    void refreshAnalysis().catch((err) => { if (!signal.aborted) setError(err instanceof Error ? err.message : 'Không đọc được đánh giá SRC.') })
-  }, [refreshAnalysis])
+    if (!hasRunningAnalysis) return
+    const timer = setInterval(() => {
+      void refreshAnalysis()
+    }, 2500)
+    return () => clearInterval(timer)
+  }, [hasRunningAnalysis, refreshAnalysis])
 
   useEffect(() => {
     if (workspaceId) root.current?.querySelector<HTMLVideoElement>('.slib-inspector video')?.pause()
@@ -362,7 +386,19 @@ function ProjectSources({ project }: { project: Project }): React.ReactElement {
   return (
     <div className="slib-page" ref={root}>
       <header className="slib-header"><div><h1>Thư viện SRC</h1><div className="slib-project-meta"><Folder size={14} aria-hidden="true" /><span>{project.name}</span><span>·</span><span>{sources.length} tệp</span><span>·</span><span>{sizeLabel(sources.reduce((sum, asset) => sum + (asset.fileSize || 0), 0))}</span>{lastImported && <><span>·</span><span>Cập nhật {new Date(lastImported).toLocaleDateString('vi-VN')}</span></>}</div></div>
-        <div className="slib-import-actions"><button type="button" className="slib-button" disabled={loading || importing} onClick={() => { void importSources(true) }}><Folder size={16} aria-hidden="true" />Nhập thư mục</button><button type="button" className="slib-button slib-button--primary" disabled={loading || importing} onClick={() => { void importSources(false) }}><Upload size={16} aria-hidden="true" />Nhập tư liệu</button></div>
+        <div className="slib-import-actions">
+          <button type="button" className="slib-button" onClick={() => setScriptModalOpen(true)}>
+            <FileText size={15} aria-hidden="true" />
+            <span>Kịch bản & Brief</span>
+            {project.script && <span style={{ fontSize: 10, opacity: 0.8 }}>(Đã có)</span>}
+          </button>
+          <button type="button" className="slib-button" disabled={loading || importing} onClick={() => { void importSources(true) }}>
+            <Folder size={16} aria-hidden="true" />Nhập thư mục
+          </button>
+          <button type="button" className="slib-button slib-button--primary" disabled={loading || importing} onClick={() => { void importSources(false) }}>
+            <Upload size={16} aria-hidden="true" />Nhập tư liệu
+          </button>
+        </div>
       </header>
       {error && <p role="alert" className="slib-notice slib-notice--error">{error}</p>}
       {importing && <p role="status" className="slib-notice">Đang nhập: {progress || 'Chờ chọn tệp...'}</p>}
@@ -405,7 +441,8 @@ function ProjectSources({ project }: { project: Project }): React.ReactElement {
             project={project}
             onOpenWorkspace={() => setWorkspaceId(inspected.id)}
             onRelink={() => relink(inspected.id)}
-            onAnalysisChange={refreshAnalysis}
+            onAnalysisChange={async () => { await refreshAnalysis() }}
+            onOpenScript={() => setScriptModalOpen(true)}
           />
         ) : (
           <aside className="slib-inspector slib-inspector--empty" aria-label="Chi tiết tư liệu">
@@ -416,7 +453,13 @@ function ProjectSources({ project }: { project: Project }): React.ReactElement {
           </aside>
         )}
       </div>
-      {workspace && <SourceWorkspace key={workspace.id} source={workspace} project={project} onClose={() => { setWorkspaceId(null); void Promise.all([refreshSources(), refreshAnalysis()]).catch((err) => { if (!lifetime.current.signal.aborted) setError(String(err)) }) }} onMetadata={refreshSources} />}
+      {workspace && <SourceWorkspace key={workspace.id} source={workspace} project={project} onClose={() => { setWorkspaceId(null); void Promise.all([refreshSources(), refreshAnalysis()]).catch((err) => { if (!lifetime.current.signal.aborted) setError(String(err)) }) }} onMetadata={async () => { await refreshSources() }} />}
+      <ProjectScriptModal
+        isOpen={scriptModalOpen}
+        onClose={() => setScriptModalOpen(false)}
+        project={project}
+        onSaved={async () => { await refreshAnalysis() }}
+      />
     </div>
   )
 }

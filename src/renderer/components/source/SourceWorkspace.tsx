@@ -24,7 +24,7 @@ export function SourceWorkspace({ source, project, onClose, onMetadata }: {
   const [runId, setRunId] = useState('')
   const [model, setModel] = useState('')
   const [start, setStart] = useState('0')
-  const [end, setEnd] = useState(String(Math.min(source.duration || 60, 60)))
+  const [end, setEnd] = useState(String(Math.floor(Math.min(source.duration || 60, 60) * 1000) / 1000))
   const [consent, setConsent] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -63,7 +63,12 @@ export function SourceWorkspace({ source, project, onClose, onMetadata }: {
       const next = await window.api.sourceAnalysis.probe(project.id, source.id)
       if (!alive.current) return
       setInfo(next)
-      setEnd((previous) => String(Math.min(Number(previous) || 60, next.duration)))
+      setEnd((previous) => {
+        const prevNum = Number(previous)
+        const cleanNext = Math.floor(next.duration * 1000) / 1000
+        const limit = Math.min(Number.isFinite(prevNum) && prevNum > 0 ? prevNum : 60, cleanNext, 60)
+        return String(limit)
+      })
       await onMetadata()
     } finally { probeLoading.current = false }
   }
@@ -112,7 +117,9 @@ export function SourceWorkspace({ source, project, onClose, onMetadata }: {
     finally { if (alive.current) setBusy(false) }
   }
   const duration = info?.duration || playbackDuration || source.duration || 0
-  const validRange = Number.isFinite(Number(start)) && Number.isFinite(Number(end)) && Number(start) >= 0 && Number(end) > Number(start) && Number(end) - Number(start) <= 60 && Number(end) <= duration
+  const startNum = Number(start)
+  const endNum = Number(end)
+  const validRange = Number.isFinite(startNum) && Number.isFinite(endNum) && startNum >= 0 && endNum > startNum && endNum - startNum <= 60 && (duration <= 0 || endNum <= duration + 0.05)
 
   return <dialog ref={dialog} className="src-workspace" aria-labelledby="src-workspace-title" onCancel={(event) => { event.preventDefault(); onClose() }}>
     <header className="src-workspace-header"><div><h2 id="src-workspace-title">{source.filename}</h2><span>{project.name}</span></div><button type="button" className="src-button src-icon-button" aria-label="Đóng trình xem SRC" onClick={onClose}><X size={18} aria-hidden="true" /></button></header>
@@ -124,9 +131,9 @@ export function SourceWorkspace({ source, project, onClose, onMetadata }: {
         {!image && <>
           <div className="src-viewer-toolbar"><span>{sourceTime(currentTime)} / {sourceTime(duration)}</span><button type="button" className="src-button" onClick={() => { void video.current?.requestFullscreen().catch(() => setMediaError('Không mở được chế độ toàn màn hình.')) }}><Maximize size={13} aria-hidden="true" />Toàn màn hình</button></div>
           {run?.state === 'COMPLETED' && !run.fileChanged && duration > 0 && <div className="src-segment-timeline" role="group" aria-label="Các đoạn AI trong video">{run.segments.map((segment, index) => <button key={segment.id} type="button" title={`${sourceTime(segment.startTime)} · ${segment.summary}`} aria-label={`Đoạn ${index + 1}: ${sourceTime(segment.startTime)}, ${segment.summary}`} style={{ left: `${segment.startTime / duration * 100}%`, width: `${(segment.endTime - segment.startTime) / duration * 100}%` }} onClick={() => seek(segment.startTime)}><span>{index + 1}</span></button>)}</div>}
-          <form className="src-analysis-form" onSubmit={(event) => void startAnalysis(event)}>
+          <form className="src-analysis-form" noValidate onSubmit={(event) => void startAnalysis(event)}>
             <div className="src-form-heading"><h3>Phân tích video</h3><button type="button" className="src-button src-icon-button" aria-label="Tải lại model và công cụ media" disabled={busy || Boolean(running)} onClick={() => void retryEnvironment()}><RefreshCw size={14} aria-hidden="true" /></button></div>
-            <div className="src-analysis-fields"><div><label htmlFor="src-model">Model</label><select id="src-model" value={model} onChange={(event) => setModel(event.target.value)} disabled={!environment?.aiReady || busy || Boolean(running)}>{!environment?.models.length && <option value="">Chưa có model Gemini</option>}{environment?.models.map((name) => <option key={name} value={name}>{name}</option>)}</select></div><div><label htmlFor="src-start">Từ giây</label><input id="src-start" type="number" min={0} max={duration || undefined} step="0.001" value={start} onChange={(event) => setStart(event.target.value)} disabled={busy || Boolean(running)} /></div><div><label htmlFor="src-end">Đến giây</label><input id="src-end" type="number" min={0} max={duration || undefined} step="0.001" value={end} onChange={(event) => setEnd(event.target.value)} disabled={busy || Boolean(running)} /></div></div>
+            <div className="src-analysis-fields"><div><label htmlFor="src-model">Model</label><select id="src-model" value={model} onChange={(event) => setModel(event.target.value)} disabled={!environment?.aiReady || busy || Boolean(running)}>{!environment?.models.length && <option value="">Chưa có model Gemini</option>}{environment?.models.map((name) => <option key={name} value={name}>{name}</option>)}</select></div><div><label htmlFor="src-start">Từ giây</label><input id="src-start" type="number" min={0} max={duration || undefined} step="any" value={start} onChange={(event) => setStart(event.target.value)} disabled={busy || Boolean(running)} /></div><div><label htmlFor="src-end">Đến giây</label><input id="src-end" type="number" min={0} max={duration ? Math.ceil(duration * 1000) / 1000 : undefined} step="any" value={end} onChange={(event) => setEnd(event.target.value)} disabled={busy || Boolean(running)} /></div></div>
             <div className="src-range-actions"><button type="button" className="src-time-link" disabled={Boolean(running)} onClick={() => setStart(String(Math.round(currentTime * 1000) / 1000))}>Đặt điểm đầu tại vị trí phát</button><button type="button" className="src-time-link" disabled={Boolean(running)} onClick={() => setEnd(String(Math.round(currentTime * 1000) / 1000))}>Đặt điểm cuối</button><span>Tối đa 60 giây / 12 MiB</span></div>
             {environment && !environment.mediaReady && <p role="status" className="src-notice src-notice--warning">{environment.mediaMessage}</p>}
             {environment && !environment.aiReady && <p role="status" className="src-notice src-notice--warning">Đăng nhập Antigravity trong mục Kết nối AI, sau đó tải lại model.</p>}

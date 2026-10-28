@@ -3,6 +3,7 @@ export const IPC_CHANNELS = {
   PROJECT_LIST: 'project:list',
   PROJECT_GET: 'project:get',
   PROJECT_CREATE: 'project:create',
+  PROJECT_UPDATE: 'project:update',
   PROJECT_DELETE: 'project:delete',
   PROJECT_STATS: 'project:stats',
   SELECT_DIRECTORY: 'dialog:select-directory',

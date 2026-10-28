@@ -12,6 +12,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [script, setScript] = useState('')
   const [targetPlatform, setTargetPlatform] = useState('TikTok')
   const [targetDuration, setTargetDuration] = useState('60')
   const [aspectRatio, setAspectRatio] = useState('9:16')
@@ -46,6 +47,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
       await createProject({
         name: name.trim(),
         description: description.trim(),
+        script: script.trim() || undefined,
         targetPlatform,
         targetDuration: parseFloat(targetDuration) || 60,
         aspectRatio,
@@ -55,6 +57,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
       onClose()
       setName('')
       setDescription('')
+      setScript('')
       setActiveTab('overview')
     } catch (err: any) {
       setIsSubmitting(false)
@@ -124,6 +127,22 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Mục tiêu video, thông điệp chính..."
               rows={2}
+              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all resize-none"
+            />
+          </div>
+
+          {/* Script (Optional) */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Kịch bản phân cảnh (tùy chọn)
+            </label>
+            <textarea
+              aria-label="Kịch bản phân cảnh"
+              disabled={isSubmitting}
+              value={script}
+              onChange={(e) => setScript(e.target.value)}
+              placeholder="Nhập kịch bản phân cảnh để AI chấm điểm độ phù hợp của clip nguồn với từng cảnh..."
+              rows={3}
               className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all resize-none"
             />
           </div>

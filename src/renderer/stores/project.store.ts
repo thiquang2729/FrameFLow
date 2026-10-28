@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { Project, ProjectStats, CreateProjectDTO } from '@shared/types'
+import { Project, ProjectStats, CreateProjectDTO, UpdateProjectDTO } from '@shared/types'
 import { confirmNavigation } from '../lib/navigation-guard'
 
 interface ProjectState {
@@ -17,6 +17,7 @@ interface ProjectState {
   fetchProjects: () => Promise<void>
   selectProject: (projectId: string) => Promise<void>
   createProject: (dto: CreateProjectDTO) => Promise<Project>
+  updateProject: (projectId: string, dto: UpdateProjectDTO) => Promise<Project>
   deleteProject: (projectId: string) => Promise<void>
   refreshStats: () => Promise<void>
   selectVersion: (versionId: string) => boolean
@@ -88,6 +89,23 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       return newProj
     } catch (err: any) {
       set({ error: err.message || 'Failed to create project', isLoading: false })
+      throw err
+    }
+  },
+
+  updateProject: async (projectId: string, dto: UpdateProjectDTO) => {
+    try {
+      set({ isLoading: true, error: null })
+      const updated = await window.api.updateProject(projectId, dto)
+      const list = get().projects.map((p) => (p.id === projectId ? updated : p))
+      set({
+        projects: list,
+        activeProject: get().activeProject?.id === projectId ? updated : get().activeProject,
+        isLoading: false
+      })
+      return updated
+    } catch (err: any) {
+      set({ error: err.message || 'Failed to update project', isLoading: false })
       throw err
     }
   },
