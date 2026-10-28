@@ -4,7 +4,8 @@ import {
   FileEdit,
   MessageSquare,
   Upload,
-  Plus
+  Plus,
+  Bot
 } from 'lucide-react'
 import { useProjectStore } from '../../stores/project.store'
 
@@ -22,7 +23,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenCreateProject }) => {
     { id: 'src', label: 'Thư viện SRC', icon: Folder },
     { id: 'versions', label: 'Phiên bản dựng', icon: FileEdit },
     { id: 'review', label: 'Duyệt', icon: MessageSquare },
-    { id: 'export', label: 'Xuất', icon: Upload }
+    { id: 'export', label: 'Xuất', icon: Upload },
+    { id: 'ai', label: 'Kết nối AI', icon: Bot }
   ] as const
 
   return (

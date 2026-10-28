@@ -9,6 +9,13 @@ asar: true
 asarUnpack:
   - '**/*.wasm'
 npmRebuild: false
+extraResources:
+  - from: resources/cli-proxy/${os}-${arch}
+    to: cli-proxy
+    filter:
+      - '**/*'
+  - from: resources/proxy-supervisor.cjs
+    to: proxy-supervisor.cjs
 win:
   executableName: FrameFlow
   target:

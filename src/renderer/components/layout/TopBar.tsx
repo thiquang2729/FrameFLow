@@ -10,7 +10,8 @@ export const TopBar: React.FC = () => {
     src: 'Thư viện SRC',
     versions: 'Phiên bản dựng',
     review: 'Duyệt',
-    export: 'Xuất'
+    export: 'Xuất',
+    ai: 'Kết nối AI'
   }
 
   const subLabel = tabLabels[activeTab]

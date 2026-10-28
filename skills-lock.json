@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "no-ai-slop": {
+      "source": "claudiusararu/unslop-ui-skill",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/no-ai-slop/SKILL.md",
+      "computedHash": "37b386e3d509561d7b4df239c9b3ac1d4237c2817f7e0571755c8496597448ad"
+    },
+    "unslop-ui": {
+      "source": "iamneilroberts/claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/unslop-ui/SKILL.md",
+      "computedHash": "b8bc663ae1f12fec6daad63eedd04cd2522955c4ba9c709ebaae2ea123870db8"
+    }
+  }
+}

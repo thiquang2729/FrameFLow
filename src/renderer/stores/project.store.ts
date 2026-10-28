@@ -6,14 +6,14 @@ interface ProjectState {
   projects: Project[]
   activeProject: Project | null
   stats: ProjectStats | null
-  activeTab: 'overview' | 'review' | 'versions' | 'src' | 'export'
+  activeTab: 'overview' | 'review' | 'versions' | 'src' | 'export' | 'ai'
   isLoading: boolean
   error: string | null
   activeVersionId: string | null
   reviewCommentId: string | null
 
   // Actions
-  setActiveTab: (tab: 'overview' | 'review' | 'versions' | 'src' | 'export') => void
+  setActiveTab: (tab: 'overview' | 'review' | 'versions' | 'src' | 'export' | 'ai') => void
   fetchProjects: () => Promise<void>
   selectProject: (projectId: string) => Promise<void>
   createProject: (dto: CreateProjectDTO) => Promise<Project>

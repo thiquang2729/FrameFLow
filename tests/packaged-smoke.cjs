@@ -8,7 +8,8 @@ const { spawn, execFileSync } = require('node:child_process')
 
 if (process.platform !== 'win32') throw new Error('This smoke test currently targets the Windows unpacked build.')
 if (typeof WebSocket !== 'function') throw new Error('Node.js 22+ is required for the packaged smoke test.')
-const executable = path.resolve(process.argv[2] || 'release/win-unpacked/FrameFlow.exe')
+const aiOnly = process.argv.includes('--ai-only')
+const executable = path.resolve(process.argv.slice(2).find((arg) => !arg.startsWith('--')) || 'release/win-unpacked/FrameFlow.exe')
 if (!fs.existsSync(executable)) throw new Error('Run pnpm build:unpack before pnpm test:packaged.')
 const base = path.join(process.env.LOCALAPPDATA, 'Temp', 'opencode')
 fs.mkdirSync(base, { recursive: true })
@@ -27,6 +28,9 @@ const pending = new Map()
 const runtimeErrors = []
 const notes = []
 const cases = []
+const aiCases = []
+let proxyPid
+let proxyEndpoint
 
 function send(method, params = {}) {
   const id = ++serial
@@ -102,6 +106,15 @@ async function launch() {
   await send('Runtime.enable')
   await waitFor('Boolean(window.api && document.querySelector("nav"))', 'packaged preload and renderer')
   assert.ok(fs.existsSync(path.join(home, '.frameflow', 'projects.json')), 'test registry is isolated from real user data')
+  await waitFor(`window.api.ai.status().then(status => status.state === 'ready')`, 'bundled CLIProxyAPI automatically ready', 35000)
+  const ai = await evaluate('window.api.ai.status()')
+  assert.equal(ai.accounts, 0, 'test does not access real OAuth accounts')
+  assert.ok(ai.pid > 0)
+  proxyPid = ai.pid
+  proxyEndpoint = ai.endpoint
+  assert.equal((await fetch(ai.endpoint + '/models')).status, 401)
+  assert.deepEqual(await evaluate('window.api.ai.models()'), [])
+  aiCases.push({ autoStart: true, pid: ai.pid, endpoint: ai.endpoint, unauthorizedRequestsRejected: true })
 }
 
 async function close() {
@@ -115,6 +128,16 @@ async function close() {
   if (socket) socket.close()
   child = null
   socket = null
+  if (proxyPid) {
+    const deadline = Date.now() + 6000
+    let running = true
+    while (running && Date.now() < deadline) {
+      try { process.kill(proxyPid, 0); await delay(100) } catch { running = false }
+    }
+    assert.equal(running, false, 'closing packaged FrameFlow leaves no owned proxy process')
+    await assert.rejects(fetch(proxyEndpoint + '/models'))
+    proxyPid = null
+  }
 }
 
 async function record(width, height, mimeType) {
@@ -173,6 +196,45 @@ async function exercise(project, version, width, height, mimeType) {
 
 async function run() {
   await launch()
+  await click('Kết nối AI')
+  await waitFor(`document.body.textContent.includes('Proxy cục bộ')`, 'AI connection screen')
+  assert.equal(await evaluate(`document.querySelector('button[type="submit"]').disabled`), true, 'real AI test requires a signed-in account')
+  const aiScreenshot = await send('Page.captureScreenshot', { format: 'png' })
+  fs.writeFileSync(path.join(root, 'ai-connection.png'), Buffer.from(aiScreenshot.data, 'base64'))
+  const previousPid = proxyPid
+  await click('Khởi động lại AI')
+  await waitFor(`window.api.ai.status().then(status => status.state === 'ready' && status.pid !== ${previousPid})`, 'restart bundled proxy')
+  const restarted = await evaluate('window.api.ai.status()')
+  proxyPid = restarted.pid
+  proxyEndpoint = restarted.endpoint
+  assert.throws(() => process.kill(previousPid, 0))
+  aiCases.push({ restart: true, pid: restarted.pid })
+  if (aiOnly) {
+    process.kill(proxyPid)
+    await waitFor(`window.api.ai.status().then(status => status.state === 'error')`, 'owned proxy crash reported')
+    await waitFor(`document.body.textContent.includes('dừng bất ngờ')`, 'proxy crash visible in UI')
+    await click('Khởi động lại AI')
+    await waitFor(`window.api.ai.status().then(status => status.state === 'ready')`, 'recover after owned proxy crash')
+    const recovered = await evaluate('window.api.ai.status()')
+    proxyPid = recovered.pid
+    proxyEndpoint = recovered.endpoint
+    aiCases.push({ proxyCrashRecovery: true })
+    await close()
+    await launch()
+    await click('Kết nối AI')
+    await waitFor(`document.body.textContent.includes('Proxy cục bộ')`, 'AI screen after full restart')
+    const crashed = child
+    const crashedExit = new Promise((resolve) => crashed.once('exit', resolve))
+    crashed.kill()
+    await crashedExit
+    await close()
+    aiCases.push({ normalExitCleanup: true, reopenAutoStart: true, appCrashCleanup: true })
+    assert.deepEqual(runtimeErrors, [])
+    const report = { status: 'PASS', scope: 'AI integration, no signed-in account', executable, aiCases, artifacts: root }
+    fs.writeFileSync(path.join(root, 'result.json'), JSON.stringify(report, null, 2))
+    console.log(JSON.stringify(report, null, 2))
+    return
+  }
   const project = await evaluate(`window.api.createProject({ name:'Packaged smoke',projectDir:${JSON.stringify(root)},aspectRatio:'16:9' })`)
   assert.ok(project.projectPath.startsWith(root + path.sep))
   let number = 0
@@ -209,7 +271,14 @@ async function run() {
     assert.ok(fs.existsSync(path.join(item.packagePath, 'review.json')))
   }
   assert.deepEqual(runtimeErrors, [])
-  const report = { status: 'PASS', executable, cases, notes, artifacts: root }
+  // Simulate an abrupt Electron exit: the lease watchdog must still stop Go.
+  const crashed = child
+  const crashedExit = new Promise((resolve) => crashed.once('exit', resolve))
+  crashed.kill()
+  await crashedExit
+  await close()
+  aiCases.push({ crashCleanup: true })
+  const report = { status: 'PASS', executable, aiCases, cases, notes, artifacts: root }
   fs.writeFileSync(path.join(root, 'result.json'), JSON.stringify(report, null, 2))
   console.log(JSON.stringify(report, null, 2))
 }

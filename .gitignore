@@ -7,6 +7,7 @@ dist/
 dist-electron/
 out/
 release/
+resources/cli-proxy/
 build/
 *.tsbuildinfo
 
