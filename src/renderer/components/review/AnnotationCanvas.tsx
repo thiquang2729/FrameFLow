@@ -144,7 +144,7 @@ export const AnnotationCanvas = React.forwardRef<
         <canvas ref={canvasRef} width={size.width} height={size.height} aria-label={readOnly ? 'Frame đã lưu cùng annotation' : 'Vẽ annotation lên frame'}
           tabIndex={readOnly ? -1 : 0}
           style={fit === 'player' ? { width: '100%', height: '100%' } : undefined}
-          className={`block ${fit === 'player' ? 'box-border' : 'max-w-full max-h-full w-auto h-auto mx-auto'} bg-black rounded-lg border border-slate-200 touch-none ${readOnly ? '' : 'cursor-crosshair'}`}
+          className={`block ${fit === 'player' ? 'box-border' : 'max-w-full max-h-full w-auto h-auto mx-auto rounded-lg border border-slate-200'} bg-black touch-none ${readOnly ? '' : 'cursor-crosshair'}`}
           onPointerDown={(event) => {
             if (readOnly || !loaded || event.button !== 0) return
             event.currentTarget.focus()

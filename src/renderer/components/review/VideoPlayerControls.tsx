@@ -540,35 +540,6 @@ export const VideoPlayerControls: React.FC<VideoPlayerControlsProps> = ({
           </div>
         </div>
       </div>
-
-      {/* 3. Hotkeys Badge Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-400 pt-0.5">
-        <div className="flex flex-wrap items-center gap-2.5">
-          <span className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded font-mono text-slate-600 text-[9px]">Space</kbd>
-            <span>Phát/dừng</span>
-          </span>
-          <span className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded font-mono text-slate-600 text-[9px]">C</kbd>
-            <span>Bình luận</span>
-          </span>
-          <span className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded font-mono text-slate-600 text-[9px]">D</kbd>
-            <span>Vẽ</span>
-          </span>
-          <span className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded font-mono text-slate-600 text-[9px]">←/→</kbd>
-            <span>Từng frame</span>
-          </span>
-          <span className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded font-mono text-slate-600 text-[9px]">Shift+←/→</kbd>
-            <span>5 giây</span>
-          </span>
-        </div>
-        <div className="font-mono text-slate-400">
-          Frame ước tính ({fps} fps)
-        </div>
-      </div>
     </div>
   )
 }

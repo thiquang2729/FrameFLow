@@ -553,17 +553,18 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
               />
             </fieldset>
           </div>
-          <div className={`flex-1 min-h-0 ${isVertical ? 'bg-slate-950/95 p-2 sm:p-3' : 'bg-slate-900 p-4'} flex items-center justify-center relative overflow-hidden select-none`}>
+          <div className="flex-1 min-h-0 bg-slate-950 flex items-center justify-center relative overflow-hidden select-none">
             <div
-              className={`relative flex items-center justify-center ${
+              className={`relative flex items-center justify-center h-full ${
                 isVertical
-                  ? 'rounded-2xl shadow-2xl border-2 border-slate-700/80 bg-black overflow-hidden'
-                  : 'w-full h-full rounded-xl bg-black overflow-hidden'
+                  ? 'bg-black overflow-hidden'
+                  : 'w-full bg-black overflow-hidden'
               }`}
               style={
                 isVertical
                   ? {
                       aspectRatio: `${videoDimensions.width} / ${videoDimensions.height}`,
+                      height: '100%',
                       maxHeight: '100%',
                       maxWidth: '100%'
                     }
