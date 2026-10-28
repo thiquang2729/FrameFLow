@@ -23,7 +23,11 @@ Nếu tệp nguồn bị di chuyển/không phát được: nút **Liên kết l
 - Technical/Editorial score riêng cho từng segment. Không tạo điểm tổng thay thế và không tự nhận diện người.
 - File identity gồm hash đường dẫn, kích thước, mtime và ctime; **không phải content hash**. File/brief thay đổi tạo cảnh báo stale; không ghi đè lịch sử.
 
-Chưa triển khai: tự chia và phân tích toàn bộ video dài, batch queue, resume chunk, bộ lọc AI ở thư viện, tìm kiếm ngữ nghĩa, source_library.json export và sinh lại thumbnail sau relink. Không coi đây là hoàn tất toàn bộ kế hoạch SRC Intelligence.
+Thư viện SRC hiển thị lưới/list, điểm KT/BT và tag trên thumbnail, bảng xem video và đánh giá bên phải. Điểm thumbnail lấy từ segment đầu của lần phân tích hoàn tất gần nhất, không phải điểm chung toàn clip; tooltip ghi phạm vi thời gian. Bảng chất lượng cho phép chọn segment, xem các điểm thành phần, vấn đề theo timestamp và gợi ý sử dụng. Kết quả stale/bị bác bỏ không được dùng làm điểm lọc/xếp hạng.
+
+Bộ lọc hỗ trợ ngưỡng kỹ thuật/biên tập, loại cảnh, tag, vấn đề và thời lượng. Tìm kiếm cục bộ gồm tên/đường dẫn, summary và tag AI khả dụng. Thẻ của người dùng được lưu riêng. Không tạo ảnh/điểm/tag mẫu để lấp giao diện khi chưa có dữ liệu.
+
+Chưa triển khai: tự chia và phân tích toàn bộ video dài, batch queue, resume chunk, tìm kiếm ngữ nghĩa, source_library.json export và sinh lại thumbnail sau relink. Không coi đây là hoàn tất toàn bộ kế hoạch SRC Intelligence.
 
 ## Protocol và trạng thái xác minh
 

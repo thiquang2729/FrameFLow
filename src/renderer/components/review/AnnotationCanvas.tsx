@@ -210,6 +210,10 @@ export const AnnotationCanvas = React.forwardRef<
               onChange={(e) => onTextContentChange?.(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
+                  if (e.ctrlKey || e.metaKey) {
+                    commitText()
+                    return
+                  }
                   e.preventDefault()
                   commitText()
                 } else if (e.key === 'Escape') {
