@@ -7,7 +7,8 @@ import {
   Circle,
   Type,
   Undo2,
-  Redo2
+  Redo2,
+  Trash2
 } from 'lucide-react'
 import { AnnotationType } from '@shared/types'
 
@@ -24,6 +25,8 @@ interface DrawingToolbarProps {
   onRedo?: () => void
   canUndo: boolean
   canRedo?: boolean
+  onClearAll?: () => void
+  canClear?: boolean
 }
 
 export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
@@ -38,7 +41,9 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
   onUndo,
   onRedo,
   canUndo,
-  canRedo = false
+  canRedo = false,
+  onClearAll,
+  canClear = false
 }) => {
   const tools = [
     { id: 'PEN' as AnnotationType, label: 'Bút tự do', icon: Pen },
@@ -61,20 +66,20 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
   ]
 
   return (
-    <div className="space-y-2 pt-0.5 text-xs select-none">
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs select-none">
       {/* Tool Buttons Row */}
-      <div className="grid grid-cols-4 lg:grid-cols-8 gap-1.5">
-        {tools.map((t, idx) => {
+      <div className="flex items-center gap-1 flex-wrap">
+        {tools.map((t) => {
           const Icon = t.icon
           const isSelected = currentTool === t.id
           return (
             <button
-              key={idx}
+              key={t.id}
               type="button"
               onClick={() => setCurrentTool(t.id)}
-              className={`py-1.5 px-2 rounded-lg flex flex-col items-center justify-center gap-1 transition-all ${
+              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
                 isSelected
-                  ? 'bg-blue-600 text-white shadow-sm'
+                  ? 'bg-blue-600 text-white shadow-xs'
                   : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/80'
               }`}
               title={t.label}
@@ -82,21 +87,22 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
               aria-pressed={isSelected}
             >
               <Icon className="w-4 h-4" />
-              <span className="text-[10px] truncate max-w-full font-medium">{t.label}</span>
             </button>
           )
         })}
+
+        <div className="h-4 w-px bg-slate-200 mx-1 shrink-0" />
 
         {/* Undo Button */}
         <button
           type="button"
           onClick={onUndo}
           disabled={!canUndo}
-          className="py-1.5 px-2 rounded-lg flex flex-col items-center justify-center gap-1 bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/80 disabled:opacity-40 transition-all"
+          className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/80 disabled:opacity-40 transition-all"
           title="Hoàn tác"
+          aria-label="Hoàn tác"
         >
           <Undo2 className="w-4 h-4" />
-          <span className="text-[10px] font-medium">Hoàn tác</span>
         </button>
 
         {/* Redo Button */}
@@ -104,46 +110,58 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
           type="button"
           onClick={onRedo}
           disabled={!canRedo}
-          className="py-1.5 px-2 rounded-lg flex flex-col items-center justify-center gap-1 bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/80 disabled:opacity-40 transition-all"
+          className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/80 disabled:opacity-40 transition-all"
           title="Làm lại"
+          aria-label="Làm lại"
         >
           <Redo2 className="w-4 h-4" />
-          <span className="text-[10px] font-medium">Làm lại</span>
         </button>
+
+        {onClearAll && (
+          <button
+            type="button"
+            onClick={onClearAll}
+            disabled={!canClear}
+            className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-red-600 border border-slate-200/80 disabled:opacity-40 transition-all"
+            title="Xóa tất cả hình vẽ"
+            aria-label="Xóa tất cả hình vẽ"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
-      {/* Colors & Sizes Row */}
-      <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+      {/* Colors & Sizes */}
+      <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
         {/* Colors */}
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-semibold text-slate-500">Màu sắc</span>
-          <div className="flex items-center gap-1.5">
-            {colors.map((c) => (
-              <button
-                key={c}
-                type="button"
-                aria-label={`Màu ${c}`}
-                aria-pressed={currentColor === c}
-                onClick={() => setCurrentColor(c)}
-                className={`w-5 h-5 rounded-full transition-all border ${
-                  c === '#ffffff' ? 'border-slate-300' : 'border-transparent'
-                } ${
-                  currentColor === c
-                    ? 'ring-2 ring-blue-500 ring-offset-1 scale-110 shadow-sm'
-                    : 'hover:scale-105'
-                }`}
-                style={{ backgroundColor: c }}
-              />
-            ))}
-          </div>
+        <div className="flex items-center gap-1.5">
+          {colors.map((c) => (
+            <button
+              key={c}
+              type="button"
+              aria-label={`Màu ${c}`}
+              aria-pressed={currentColor === c}
+              onClick={() => setCurrentColor(c)}
+              className={`w-5 h-5 rounded-full transition-all border ${
+                c === '#ffffff' ? 'border-slate-300' : 'border-transparent'
+              } ${
+                currentColor === c
+                  ? 'ring-2 ring-blue-500 ring-offset-1 scale-110 shadow-xs'
+                  : 'hover:scale-110'
+              }`}
+              style={{ backgroundColor: c }}
+            />
+          ))}
         </div>
 
+        <div className="h-4 w-px bg-slate-200 shrink-0 hidden sm:block" />
+
         {/* Stroke / Font Size Slider */}
-        <div className="flex items-center gap-2 justify-end">
+        <div className="flex items-center gap-2">
           <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">
             {currentTool === 'TEXT' ? 'Cỡ chữ' : 'Nét'}
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <input
               aria-label={currentTool === 'TEXT' ? 'Kích thước cỡ chữ' : 'Độ dày nét vẽ'}
               type="range"
@@ -159,9 +177,9 @@ export const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
                   setStrokeWidth(val)
                 }
               }}
-              className="w-24 sm:w-28 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+              className="w-20 sm:w-24 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
             />
-            <span className="text-[11px] font-mono text-slate-500 w-8 text-right select-none">
+            <span className="text-[11px] font-mono text-slate-500 w-7 text-right select-none">
               {currentTool === 'TEXT' ? fontSize : strokeWidth}px
             </span>
           </div>

@@ -15,11 +15,12 @@ interface AnnotationCanvasProps {
   onTextContentChange?: (text: string) => void
   readOnly?: boolean
   fit?: 'preview' | 'player'
+  initialDimensions?: { width: number; height: number }
 }
 
 export const AnnotationCanvas = React.forwardRef<
   { getAnnotatedBase64: () => string | null }, AnnotationCanvasProps
->(({ imageSrc, annotations, onAnnotationsChange, currentTool, currentColor, strokeWidth, fontSize = 24, textContent = '', onTextContentChange, readOnly = false, fit = 'preview' }, ref) => {
+>(({ imageSrc, annotations, onAnnotationsChange, currentTool, currentColor, strokeWidth, fontSize = 24, textContent = '', onTextContentChange, readOnly = false, fit = 'preview', initialDimensions }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -29,9 +30,17 @@ export const AnnotationCanvas = React.forwardRef<
   const [preview, setPreview] = useState<Annotation | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState('')
-  const [size, setSize] = useState({ width: 960, height: 540 })
+  const [size, setSize] = useState(initialDimensions || { width: 960, height: 540 })
   const [viewport, setViewport] = useState({ width: 0, height: 0 })
   const [textPos, setTextPos] = useState<Point>({ x: 0.15, y: 0.2 })
+
+  React.useLayoutEffect(() => {
+    if (fit !== 'player' || !containerRef.current) return
+    const rect = containerRef.current.getBoundingClientRect()
+    if (rect.width && rect.height) {
+      setViewport({ width: rect.width, height: rect.height })
+    }
+  }, [fit])
 
   useEffect(() => {
     if (fit !== 'player' || !containerRef.current) return
@@ -136,7 +145,7 @@ export const AnnotationCanvas = React.forwardRef<
   return (
     <div ref={containerRef} className={fit === 'player' ? 'w-full h-full min-h-0 flex items-center justify-center relative' : 'w-full h-full flex flex-col items-center justify-center'}>
       {error && <p role="alert" className="text-xs text-red-600 p-2">{error}</p>}
-      {!loaded && !error && <p role="status" className="text-xs text-slate-400 p-2">Đang tải frame...</p>}
+      {fit !== 'player' && !loaded && !error && <p role="status" className="text-xs text-slate-400 p-2">Đang tải frame...</p>}
       <div
         className="relative flex items-center justify-center"
         style={fit === 'player' && canvasW && canvasH ? { width: canvasW, height: canvasH } : undefined}
@@ -144,7 +153,7 @@ export const AnnotationCanvas = React.forwardRef<
         <canvas ref={canvasRef} width={size.width} height={size.height} aria-label={readOnly ? 'Frame đã lưu cùng annotation' : 'Vẽ annotation lên frame'}
           tabIndex={readOnly ? -1 : 0}
           style={fit === 'player' ? { width: '100%', height: '100%' } : undefined}
-          className={`block ${fit === 'player' ? 'box-border' : 'max-w-full max-h-full w-auto h-auto mx-auto'} bg-black rounded-lg border border-slate-200 touch-none ${readOnly ? '' : 'cursor-crosshair'}`}
+          className={`block ${fit === 'player' ? 'box-border bg-transparent' : 'max-w-full max-h-full w-auto h-auto mx-auto rounded-lg border border-slate-200 bg-black'} touch-none ${readOnly ? '' : 'cursor-crosshair'}`}
           onPointerDown={(event) => {
             if (readOnly || !loaded || event.button !== 0) return
             event.currentTarget.focus()

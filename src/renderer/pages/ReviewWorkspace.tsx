@@ -177,6 +177,101 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
   const [editingId, setEditingId] = useState<string | null>(null)
   const [seeking, setSeeking] = useState(false)
   const [playbackRate, setPlaybackRate] = useState(1)
+  const [leftWidth, setLeftWidth] = useState(() => {
+    try {
+      const saved = localStorage.getItem('frameflow_review_left_width')
+      const num = saved ? Number(saved) : 320
+      return Number.isFinite(num) && num >= 220 && num <= 600 ? num : 320
+    } catch {
+      return 320
+    }
+  })
+  const [isResizingLeft, setIsResizingLeft] = useState(false)
+
+  const [rightWidth, setRightWidth] = useState(() => {
+    try {
+      const saved = localStorage.getItem('frameflow_review_right_width')
+      const num = saved ? Number(saved) : 320
+      return Number.isFinite(num) && num >= 260 && num <= 600 ? num : 320
+    } catch {
+      return 320
+    }
+  })
+  const [isResizingRight, setIsResizingRight] = useState(false)
+
+  useEffect(() => {
+    return () => {
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [])
+
+  const handleLeftResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    setIsResizingLeft(true)
+    const startX = e.clientX
+    const startWidth = leftWidth
+
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      const delta = moveEvent.clientX - startX
+      const maxW = Math.max(360, Math.min(640, window.innerWidth - 450))
+      const newWidth = Math.min(maxW, Math.max(220, Math.round(startWidth + delta)))
+      setLeftWidth(newWidth)
+    }
+
+    const onPointerUp = (upEvent: PointerEvent) => {
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      setIsResizingLeft(false)
+      const finalDelta = upEvent.clientX - startX
+      const maxW = Math.max(360, Math.min(640, window.innerWidth - 450))
+      const finalWidth = Math.min(maxW, Math.max(220, Math.round(startWidth + finalDelta)))
+      try {
+        localStorage.setItem('frameflow_review_left_width', String(finalWidth))
+      } catch {}
+    }
+
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerUp)
+  }
+
+  const handleRightResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    setIsResizingRight(true)
+    const startX = e.clientX
+    const startWidth = rightWidth
+
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      const delta = startX - moveEvent.clientX
+      const maxW = Math.max(360, Math.min(640, window.innerWidth - 450))
+      const newWidth = Math.min(maxW, Math.max(260, Math.round(startWidth + delta)))
+      setRightWidth(newWidth)
+    }
+
+    const onPointerUp = (upEvent: PointerEvent) => {
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      setIsResizingRight(false)
+      const finalDelta = startX - upEvent.clientX
+      const maxW = Math.max(360, Math.min(640, window.innerWidth - 450))
+      const finalWidth = Math.min(maxW, Math.max(260, Math.round(startWidth + finalDelta)))
+      try {
+        localStorage.setItem('frameflow_review_right_width', String(finalWidth))
+      } catch {}
+    }
+
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerUp)
+  }
+
   const baseline = useRef('')
   const annotations = history[historyIndex]
   const changeAnnotations = (next: Annotation[]) => {
@@ -285,7 +380,6 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
     setDraftTime(video.currentTime)
     setEditingId(null)
     setDrawingMode(true)
-    setFrame(null)
     setHistory([[]])
     setHistoryIndex(0)
     setContent('')
@@ -298,7 +392,7 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
       setFrame(captured.base64)
       setDraftTime(captured.timestamp)
       setTime(captured.timestamp)
-      if (Math.abs(video.currentTime - captured.timestamp) > 0.0001) video.currentTime = captured.timestamp
+      if (Math.abs(video.currentTime - captured.timestamp) > 0.04) video.currentTime = captured.timestamp
       if (!draw) textRef.current?.focus()
     } catch (err) {
       if (mounted.current) {
@@ -451,7 +545,10 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
     <>
       {error && <p role="alert" className="p-3 text-xs text-red-700 bg-red-50">{error}</p>}
       <div className="flex-1 flex min-h-0 overflow-x-auto">
-        <aside className="w-80 shrink-0 border-r border-slate-200 bg-white flex flex-col">
+        <aside
+          style={{ width: `${leftWidth}px` }}
+          className="shrink-0 border-r border-slate-200 bg-white flex flex-col relative"
+        >
           <div className="p-4 border-b space-y-3"><h2 className="text-sm font-bold">Bình luận ({comments.length})</h2>
             <select aria-label="Lọc trạng thái bình luận" className={inputClass} value={filter} onChange={(event) => setFilter(event.target.value)}>
               <option value="ALL">Tất cả trạng thái</option>{Object.entries(statuses).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -495,47 +592,27 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
             })}
           </div>
         </aside>
-        <main className="flex-1 min-w-[320px] flex flex-col">
-          <div className="p-2.5 sm:p-3 bg-white border-b border-slate-200 shrink-0 space-y-2" aria-label="Công cụ vẽ trên video">
-            <div className="flex flex-wrap justify-between items-center gap-2 text-xs">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-mono">Frame ~{frameIndex(draftTime ?? time)} · {formatTime(draftTime ?? time)} · {version.name}</span>
-                {draftTime !== null && (
-                  <span className="text-slate-400 font-mono text-[11px]">
-                    · {annotations.length} hình {dirty ? '(Chưa lưu)' : ''}{editingId ? ` · Sửa ${editingId}` : ''}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                {draftTime !== null && (
-                  <>
-                    <button className={buttonClass} disabled={saving || capturing || !annotations.length} onClick={() => changeAnnotations([])}>
-                      Xóa tất cả hình
-                    </button>
-                    <button className={buttonClass} disabled={saving || capturing} onClick={() => { leaveDraft() }}>
-                      Hủy vẽ
-                    </button>
-                    <button
-                      className={`${buttonClass} bg-blue-600 text-white hover:bg-blue-700`}
-                      disabled={saving || capturing || !frame || (!annotations.length && !content.trim())}
-                      onClick={() => { void saveComment() }}
-                    >
-                      {editingId ? 'Lưu thay đổi frame' : 'Lưu chú thích frame'}
-                    </button>
-                  </>
-                )}
-                <button
-                  aria-label="Bật/tắt vẽ trên frame"
-                  aria-pressed={drawingMode}
-                  disabled={!ready || loading || capturing || saving || seeking}
-                  className={`${buttonClass} flex items-center gap-1 ${drawingMode ? 'bg-blue-50 text-blue-700' : ''}`}
-                  onClick={toggleDrawing}
-                >
-                  <Pen size={14} />
-                  {drawingMode ? 'Tắt vẽ (D)' : 'Vẽ trên frame (D)'}
-                </button>
-              </div>
-            </div>
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Kéo để điều chỉnh độ rộng danh sách bình luận (nhấp đúp để đặt lại mặc định)"
+          title="Kéo để thay đổi kích thước · Nhấp đúp để đặt lại mặc định (320px)"
+          onPointerDown={handleLeftResizeStart}
+          onDoubleClick={() => {
+            setLeftWidth(320)
+            try {
+              localStorage.setItem('frameflow_review_left_width', '320')
+            } catch {}
+          }}
+          className={`w-1 cursor-col-resize relative z-20 transition-colors shrink-0 group select-none ${
+            isResizingLeft ? 'bg-blue-500' : 'bg-transparent hover:bg-blue-500/40'
+          }`}
+          style={{ marginLeft: '-1px', marginRight: '-1px' }}
+        >
+          <div className={`absolute inset-y-0 -left-1.5 -right-1.5 cursor-col-resize ${isResizingLeft ? 'bg-blue-500/20' : 'group-hover:bg-blue-500/10'}`} />
+        </div>
+        <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
+          <div className="px-3 py-1.5 bg-white border-b border-slate-200 shrink-0" aria-label="Công cụ vẽ trên video">
             <fieldset disabled={!ready || loading || saving || capturing || seeking}>
               <DrawingToolbar
                 currentTool={tool}
@@ -550,20 +627,23 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
                 onRedo={() => setHistoryIndex((index) => Math.min(history.length - 1, index + 1))}
                 canUndo={draftTime !== null && historyIndex > 0}
                 canRedo={draftTime !== null && historyIndex < history.length - 1}
+                onClearAll={() => changeAnnotations([])}
+                canClear={draftTime !== null && annotations.length > 0}
               />
             </fieldset>
           </div>
-          <div className={`flex-1 min-h-0 ${isVertical ? 'bg-slate-950/95 p-2 sm:p-3' : 'bg-slate-900 p-4'} flex items-center justify-center relative overflow-hidden select-none`}>
+          <div className="flex-1 min-h-0 bg-slate-950 flex items-center justify-center relative overflow-hidden select-none">
             <div
-              className={`relative flex items-center justify-center ${
+              className={`relative flex items-center justify-center h-full ${
                 isVertical
-                  ? 'rounded-2xl shadow-2xl border-2 border-slate-700/80 bg-black overflow-hidden'
-                  : 'w-full h-full rounded-xl bg-black overflow-hidden'
+                  ? 'bg-black overflow-hidden'
+                  : 'w-full bg-black overflow-hidden'
               }`}
               style={
                 isVertical
                   ? {
                       aspectRatio: `${videoDimensions.width} / ${videoDimensions.height}`,
+                      height: '100%',
                       maxHeight: '100%',
                       maxWidth: '100%'
                     }
@@ -579,10 +659,10 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
                 onSeeked={(event) => { setTime(event.currentTarget.currentTime); setSeeking(false) }}
                 onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)}
                 onError={() => { setReady(false); setPlaying(false); setMediaError('Không mở được video. Tệp có thể đã bị di chuyển hoặc codec không được hỗ trợ. Hãy thử MP4 H.264.') }} />
-              {frame && draftTime !== null ? <div className={`absolute inset-0 bg-black ${drawingMode ? '' : 'pointer-events-none'}`}>
-                <AnnotationCanvas ref={canvasRef} fit="player" imageSrc={frame} annotations={annotations} onAnnotationsChange={changeAnnotations} currentTool={tool} currentColor={color} strokeWidth={strokeWidth} fontSize={fontSize} textContent={text} onTextContentChange={setText} readOnly={!drawingMode || saving} />
-              </div> : !playing && !seeking && savedFrame && activeComment ? <div className="absolute inset-0 bg-black pointer-events-none">
-                <AnnotationCanvas key={activeComment.id} fit="player" imageSrc={savedFrame} annotations={activeComment.annotations || []} currentTool={tool} currentColor={color} strokeWidth={strokeWidth} readOnly />
+              {frame && draftTime !== null ? <div className={`absolute inset-0 ${drawingMode ? '' : 'pointer-events-none'}`}>
+                <AnnotationCanvas ref={canvasRef} fit="player" imageSrc={frame} initialDimensions={videoDimensions.width && videoDimensions.height ? videoDimensions : undefined} annotations={annotations} onAnnotationsChange={changeAnnotations} currentTool={tool} currentColor={color} strokeWidth={strokeWidth} fontSize={fontSize} textContent={text} onTextContentChange={setText} readOnly={!drawingMode || saving} />
+              </div> : !playing && !seeking && savedFrame && activeComment ? <div className="absolute inset-0 pointer-events-none">
+                <AnnotationCanvas key={activeComment.id} fit="player" imageSrc={savedFrame} initialDimensions={videoDimensions.width && videoDimensions.height ? videoDimensions : undefined} annotations={activeComment.annotations || []} currentTool={tool} currentColor={color} strokeWidth={strokeWidth} readOnly />
               </div> : null}
             </div>
             {mediaError && <p role="alert" className="absolute inset-x-8 p-4 rounded-xl bg-white text-red-700 text-xs shadow-lg">{mediaError}</p>}
@@ -599,6 +679,7 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
             comments={comments}
             playbackRate={playbackRate}
             videoSrc={fileUrl(version.videoPath)}
+            drawingMode={drawingMode}
             onSeek={seek}
             onTogglePlay={togglePlay}
             onVolumeChange={(val) => {
@@ -613,9 +694,32 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
               void videoRef.current?.requestFullscreen().catch(() => setError('Không thể bật toàn màn hình.'))
             }}
             onPickComment={pickComment}
+            onToggleDrawing={toggleDrawing}
           />
         </main>
-        <aside className="w-80 shrink-0 overflow-y-auto border-l border-slate-200 bg-white p-4 space-y-4">
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Kéo để điều chỉnh độ rộng ghi chú duyệt (nhấp đúp để đặt lại mặc định)"
+          title="Kéo để thay đổi kích thước · Nhấp đúp để đặt lại mặc định (320px)"
+          onPointerDown={handleRightResizeStart}
+          onDoubleClick={() => {
+            setRightWidth(320)
+            try {
+              localStorage.setItem('frameflow_review_right_width', '320')
+            } catch {}
+          }}
+          className={`w-1 cursor-col-resize relative z-20 transition-colors shrink-0 group select-none ${
+            isResizingRight ? 'bg-blue-500' : 'bg-transparent hover:bg-blue-500/40'
+          }`}
+          style={{ marginLeft: '-1px', marginRight: '-1px' }}
+        >
+          <div className={`absolute inset-y-0 -left-1.5 -right-1.5 cursor-col-resize ${isResizingRight ? 'bg-blue-500/20' : 'group-hover:bg-blue-500/10'}`} />
+        </div>
+        <aside
+          style={{ width: `${rightWidth}px` }}
+          className="shrink-0 overflow-y-auto border-l border-slate-200 bg-white p-4 space-y-4"
+        >
           <h2 className="font-bold text-sm">Ghi chú duyệt</h2>
           {draftTime !== null ? <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void saveComment() }}>
             <p className="font-mono text-xs">{formatTime(draftTime)} · Frame ~{Math.round(draftTime * (version.fps || 30))}</p>
@@ -651,7 +755,7 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
                 </div>
               </div>
             )}
-            <div className="flex gap-2"><button type="button" className={buttonClass} disabled={saving || capturing} onClick={() => { leaveDraft() }}>Hủy</button><button type="submit" disabled={saving || capturing || !frame || (!content.trim() && !annotations.length)} className={`${buttonClass} bg-blue-600 text-white hover:bg-blue-700`}>{saving ? 'Đang lưu...' : editingId ? 'Lưu thay đổi' : 'Lưu bình luận'}</button></div>
+            <div className="flex gap-2"><button type="button" className={buttonClass} disabled={saving || capturing} onClick={() => { leaveDraft() }}>Hủy</button><button type="submit" disabled={saving || capturing || !frame || (!content.trim() && !annotations.length)} className={`${buttonClass} bg-blue-600 text-white hover:bg-blue-700`}>{saving ? 'Đang lưu...' : editingId ? 'Lưu thay đổi frame' : 'Lưu chú thích frame'}</button></div>
           </form> : <>
             <button className={`${buttonClass} flex items-center gap-2`} disabled={!ready || loading || saving} onClick={() => { void startComment() }}><Plus size={14} />Thêm bình luận (C)</button>
             {selected ? <div className="space-y-4 text-xs">

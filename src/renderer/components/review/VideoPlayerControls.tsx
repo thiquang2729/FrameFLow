@@ -10,7 +10,8 @@ import {
   Film,
   Activity,
   MessageSquare,
-  ChevronDown
+  ChevronDown,
+  Pen
 } from 'lucide-react'
 import { ReviewComment } from '@shared/types'
 
@@ -31,12 +32,14 @@ interface VideoPlayerControlsProps {
   comments: ReviewComment[]
   playbackRate: number
   videoSrc?: string
+  drawingMode?: boolean
   onSeek: (time: number) => void
   onTogglePlay: () => void
   onVolumeChange: (volume: number) => void
   onPlaybackRateChange: (rate: number) => void
   onFullscreen: () => void
   onPickComment: (comment: ReviewComment) => void
+  onToggleDrawing?: () => void
 }
 
 export const VideoPlayerControls: React.FC<VideoPlayerControlsProps> = ({
@@ -51,12 +54,14 @@ export const VideoPlayerControls: React.FC<VideoPlayerControlsProps> = ({
   comments,
   playbackRate,
   videoSrc,
+  drawingMode = false,
   onSeek,
   onTogglePlay,
   onVolumeChange,
   onPlaybackRateChange,
   onFullscreen,
-  onPickComment
+  onPickComment,
+  onToggleDrawing
 }) => {
   const percent = duration > 0 ? Math.min(100, Math.max(0, (time / duration) * 100)) : 0
 
@@ -248,14 +253,14 @@ export const VideoPlayerControls: React.FC<VideoPlayerControlsProps> = ({
   return (
     <div className="bg-white border-t border-slate-200 px-4 py-3 space-y-3 shrink-0 select-none">
       {/* 1. Playback Control Bar */}
-      <div className="flex items-center justify-between gap-3 text-xs">
+      <div className="flex items-center justify-between gap-2.5 sm:gap-3 text-xs flex-nowrap min-w-0">
         {/* Left: Time indicator */}
-        <div className="font-mono text-xs font-semibold text-slate-700 min-w-[130px] tabular-nums">
+        <div className="font-mono text-xs font-semibold text-slate-700 min-w-[130px] tabular-nums shrink-0 whitespace-nowrap">
           {formatTime(time)} <span className="text-slate-400 font-normal">/</span> {formatTime(duration)}
         </div>
 
         {/* Center: Playback Buttons */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             type="button"
             aria-label="Frame trước"
@@ -292,10 +297,29 @@ export const VideoPlayerControls: React.FC<VideoPlayerControlsProps> = ({
           </button>
         </div>
 
-        {/* Right: Volume, Speed Rate, Fullscreen */}
-        <div className="flex items-center gap-2.5 justify-end min-w-[130px]">
+        {/* Right: Drawing Toggle Button, Volume, Speed Rate, Fullscreen */}
+        <div className="flex items-center gap-2 justify-end shrink-0 flex-nowrap">
+          {onToggleDrawing && (
+            <button
+              type="button"
+              aria-label="Bật/tắt vẽ trên frame"
+              aria-pressed={drawingMode}
+              disabled={!ready || saving || capturing}
+              onClick={onToggleDrawing}
+              className={`rounded-lg border px-2.5 py-1 text-xs flex items-center gap-1.5 font-medium whitespace-nowrap transition-colors ${
+                drawingMode
+                  ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-xs'
+                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900'
+              } disabled:opacity-40`}
+              title={drawingMode ? 'Tắt vẽ (D)' : 'Vẽ trên frame (D)'}
+            >
+              <Pen size={13} />
+              <span>{drawingMode ? 'Tắt vẽ' : 'Vẽ'}</span>
+            </button>
+          )}
+
           {/* Volume */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
               aria-label={volume === 0 ? 'Bật tiếng' : 'Tắt tiếng'}
@@ -312,12 +336,12 @@ export const VideoPlayerControls: React.FC<VideoPlayerControlsProps> = ({
               step="0.05"
               value={volume}
               onChange={(e) => onVolumeChange(Number(e.target.value))}
-              className="w-16 sm:w-20 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+              className="w-14 sm:w-16 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
             />
           </div>
 
           {/* Speed Selector */}
-          <div className="relative">
+          <div className="relative shrink-0">
             <select
               value={playbackRate}
               onChange={(e) => onPlaybackRateChange(Number(e.target.value))}
@@ -337,7 +361,7 @@ export const VideoPlayerControls: React.FC<VideoPlayerControlsProps> = ({
           <button
             type="button"
             aria-label="Toàn màn hình"
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors shrink-0"
             onClick={onFullscreen}
             title="Toàn màn hình"
           >
@@ -538,35 +562,6 @@ export const VideoPlayerControls: React.FC<VideoPlayerControlsProps> = ({
               className="w-full h-full opacity-0 cursor-pointer absolute inset-0 z-10"
             />
           </div>
-        </div>
-      </div>
-
-      {/* 3. Hotkeys Badge Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-400 pt-0.5">
-        <div className="flex flex-wrap items-center gap-2.5">
-          <span className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded font-mono text-slate-600 text-[9px]">Space</kbd>
-            <span>Phát/dừng</span>
-          </span>
-          <span className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded font-mono text-slate-600 text-[9px]">C</kbd>
-            <span>Bình luận</span>
-          </span>
-          <span className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded font-mono text-slate-600 text-[9px]">D</kbd>
-            <span>Vẽ</span>
-          </span>
-          <span className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded font-mono text-slate-600 text-[9px]">←/→</kbd>
-            <span>Từng frame</span>
-          </span>
-          <span className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded font-mono text-slate-600 text-[9px]">Shift+←/→</kbd>
-            <span>5 giây</span>
-          </span>
-        </div>
-        <div className="font-mono text-slate-400">
-          Frame ước tính ({fps} fps)
         </div>
       </div>
     </div>
