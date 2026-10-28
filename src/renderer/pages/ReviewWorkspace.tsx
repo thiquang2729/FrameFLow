@@ -380,7 +380,6 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
     setDraftTime(video.currentTime)
     setEditingId(null)
     setDrawingMode(true)
-    setFrame(null)
     setHistory([[]])
     setHistoryIndex(0)
     setContent('')
@@ -393,7 +392,7 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
       setFrame(captured.base64)
       setDraftTime(captured.timestamp)
       setTime(captured.timestamp)
-      if (Math.abs(video.currentTime - captured.timestamp) > 0.0001) video.currentTime = captured.timestamp
+      if (Math.abs(video.currentTime - captured.timestamp) > 0.04) video.currentTime = captured.timestamp
       if (!draw) textRef.current?.focus()
     } catch (err) {
       if (mounted.current) {
@@ -612,47 +611,8 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
         >
           <div className={`absolute inset-y-0 -left-1.5 -right-1.5 cursor-col-resize ${isResizingLeft ? 'bg-blue-500/20' : 'group-hover:bg-blue-500/10'}`} />
         </div>
-        <main className="flex-1 min-w-[320px] flex flex-col">
-          <div className="p-2.5 sm:p-3 bg-white border-b border-slate-200 shrink-0 space-y-2" aria-label="Công cụ vẽ trên video">
-            <div className="flex flex-wrap justify-between items-center gap-2 text-xs">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-mono">Frame ~{frameIndex(draftTime ?? time)} · {formatTime(draftTime ?? time)} · {version.name}</span>
-                {draftTime !== null && (
-                  <span className="text-slate-400 font-mono text-[11px]">
-                    · {annotations.length} hình {dirty ? '(Chưa lưu)' : ''}{editingId ? ` · Sửa ${editingId}` : ''}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                {draftTime !== null && (
-                  <>
-                    <button className={buttonClass} disabled={saving || capturing || !annotations.length} onClick={() => changeAnnotations([])}>
-                      Xóa tất cả hình
-                    </button>
-                    <button className={buttonClass} disabled={saving || capturing} onClick={() => { leaveDraft() }}>
-                      Hủy vẽ
-                    </button>
-                    <button
-                      className={`${buttonClass} bg-blue-600 text-white hover:bg-blue-700`}
-                      disabled={saving || capturing || !frame || (!annotations.length && !content.trim())}
-                      onClick={() => { void saveComment() }}
-                    >
-                      {editingId ? 'Lưu thay đổi frame' : 'Lưu chú thích frame'}
-                    </button>
-                  </>
-                )}
-                <button
-                  aria-label="Bật/tắt vẽ trên frame"
-                  aria-pressed={drawingMode}
-                  disabled={!ready || loading || capturing || saving || seeking}
-                  className={`${buttonClass} flex items-center gap-1 ${drawingMode ? 'bg-blue-50 text-blue-700' : ''}`}
-                  onClick={toggleDrawing}
-                >
-                  <Pen size={14} />
-                  {drawingMode ? 'Tắt vẽ (D)' : 'Vẽ trên frame (D)'}
-                </button>
-              </div>
-            </div>
+        <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
+          <div className="px-3 py-1.5 bg-white border-b border-slate-200 shrink-0" aria-label="Công cụ vẽ trên video">
             <fieldset disabled={!ready || loading || saving || capturing || seeking}>
               <DrawingToolbar
                 currentTool={tool}
@@ -667,6 +627,8 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
                 onRedo={() => setHistoryIndex((index) => Math.min(history.length - 1, index + 1))}
                 canUndo={draftTime !== null && historyIndex > 0}
                 canRedo={draftTime !== null && historyIndex < history.length - 1}
+                onClearAll={() => changeAnnotations([])}
+                canClear={draftTime !== null && annotations.length > 0}
               />
             </fieldset>
           </div>
@@ -697,10 +659,10 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
                 onSeeked={(event) => { setTime(event.currentTarget.currentTime); setSeeking(false) }}
                 onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)}
                 onError={() => { setReady(false); setPlaying(false); setMediaError('Không mở được video. Tệp có thể đã bị di chuyển hoặc codec không được hỗ trợ. Hãy thử MP4 H.264.') }} />
-              {frame && draftTime !== null ? <div className={`absolute inset-0 bg-black ${drawingMode ? '' : 'pointer-events-none'}`}>
-                <AnnotationCanvas ref={canvasRef} fit="player" imageSrc={frame} annotations={annotations} onAnnotationsChange={changeAnnotations} currentTool={tool} currentColor={color} strokeWidth={strokeWidth} fontSize={fontSize} textContent={text} onTextContentChange={setText} readOnly={!drawingMode || saving} />
-              </div> : !playing && !seeking && savedFrame && activeComment ? <div className="absolute inset-0 bg-black pointer-events-none">
-                <AnnotationCanvas key={activeComment.id} fit="player" imageSrc={savedFrame} annotations={activeComment.annotations || []} currentTool={tool} currentColor={color} strokeWidth={strokeWidth} readOnly />
+              {frame && draftTime !== null ? <div className={`absolute inset-0 ${drawingMode ? '' : 'pointer-events-none'}`}>
+                <AnnotationCanvas ref={canvasRef} fit="player" imageSrc={frame} initialDimensions={videoDimensions.width && videoDimensions.height ? videoDimensions : undefined} annotations={annotations} onAnnotationsChange={changeAnnotations} currentTool={tool} currentColor={color} strokeWidth={strokeWidth} fontSize={fontSize} textContent={text} onTextContentChange={setText} readOnly={!drawingMode || saving} />
+              </div> : !playing && !seeking && savedFrame && activeComment ? <div className="absolute inset-0 pointer-events-none">
+                <AnnotationCanvas key={activeComment.id} fit="player" imageSrc={savedFrame} initialDimensions={videoDimensions.width && videoDimensions.height ? videoDimensions : undefined} annotations={activeComment.annotations || []} currentTool={tool} currentColor={color} strokeWidth={strokeWidth} readOnly />
               </div> : null}
             </div>
             {mediaError && <p role="alert" className="absolute inset-x-8 p-4 rounded-xl bg-white text-red-700 text-xs shadow-lg">{mediaError}</p>}
@@ -717,6 +679,7 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
             comments={comments}
             playbackRate={playbackRate}
             videoSrc={fileUrl(version.videoPath)}
+            drawingMode={drawingMode}
             onSeek={seek}
             onTogglePlay={togglePlay}
             onVolumeChange={(val) => {
@@ -731,6 +694,7 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
               void videoRef.current?.requestFullscreen().catch(() => setError('Không thể bật toàn màn hình.'))
             }}
             onPickComment={pickComment}
+            onToggleDrawing={toggleDrawing}
           />
         </main>
         <div
@@ -791,7 +755,7 @@ function VersionReview({ project, version, initialCommentId }: { project: Projec
                 </div>
               </div>
             )}
-            <div className="flex gap-2"><button type="button" className={buttonClass} disabled={saving || capturing} onClick={() => { leaveDraft() }}>Hủy</button><button type="submit" disabled={saving || capturing || !frame || (!content.trim() && !annotations.length)} className={`${buttonClass} bg-blue-600 text-white hover:bg-blue-700`}>{saving ? 'Đang lưu...' : editingId ? 'Lưu thay đổi' : 'Lưu bình luận'}</button></div>
+            <div className="flex gap-2"><button type="button" className={buttonClass} disabled={saving || capturing} onClick={() => { leaveDraft() }}>Hủy</button><button type="submit" disabled={saving || capturing || !frame || (!content.trim() && !annotations.length)} className={`${buttonClass} bg-blue-600 text-white hover:bg-blue-700`}>{saving ? 'Đang lưu...' : editingId ? 'Lưu thay đổi frame' : 'Lưu chú thích frame'}</button></div>
           </form> : <>
             <button className={`${buttonClass} flex items-center gap-2`} disabled={!ready || loading || saving} onClick={() => { void startComment() }}><Plus size={14} />Thêm bình luận (C)</button>
             {selected ? <div className="space-y-4 text-xs">
