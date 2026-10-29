@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { BadgeCheck, BrainCircuit, Copy, Lightbulb, Maximize2, MessageSquare, Play, Plus, Sparkles, Tags, TriangleAlert, X } from 'lucide-react'
+import { BadgeCheck, BrainCircuit, Copy, Lightbulb, Loader2, Maximize2, MessageSquare, Play, Plus, Sparkles, Tags, TriangleAlert, X, Zap } from 'lucide-react'
 import type { Project, SourceAsset } from '@shared/types'
 import type { SourceAnalysisRun, SourceScores } from '../../../shared/types/source-analysis'
 import { isSourceImage } from '@shared/media'
@@ -29,6 +29,7 @@ export function SourceLibraryInspector({ project, source, onClose, onOpenWorkspa
   const [editingTags, setEditingTags] = useState(false)
   const [userTags, setUserTags] = useState('')
   const [savingTags, setSavingTags] = useState(false)
+  const [realigning, setRealigning] = useState(false)
   const video = useRef<HTMLVideoElement>(null)
   const active = useRef(true)
   const fetching = useRef(false)
@@ -87,6 +88,33 @@ export function SourceLibraryInspector({ project, source, onClose, onOpenWorkspa
     } catch (err) { if (active.current) setError(err instanceof Error ? err.message : 'Không lưu được tag.') }
     finally { if (active.current) setSavingTags(false) }
   }
+
+  const handleQuickRealign = async () => {
+    if (!run || realigning) return
+    setRealigning(true)
+    setError('')
+    try {
+      const env = await window.api.sourceAnalysis.environment()
+      if (!env.aiReady) throw new Error('Chưa kết nối AI Antigravity. Hãy đăng nhập ở mục Kết nối AI.')
+      const model = env.selectedModel || env.models[0] || run.model
+      const startResult = await window.api.sourceAnalysis.start({
+        projectId: project.id,
+        sourceAssetId: source.id,
+        model,
+        startTime: run.startTime,
+        endTime: run.endTime,
+        consent: true
+      })
+      await window.api.sourceAnalysis.wait(project.id, source.id, startResult.id)
+      await refresh()
+      await onAnalysisChange()
+    } catch (err) {
+      if (active.current) setError(err instanceof Error ? err.message : 'Lỗi khi cập nhật kịch bản.')
+    } finally {
+      if (active.current) setRealigning(false)
+    }
+  }
+
   const visibleTags = [...new Set([...(run?.userTags || []), ...(valid ? run?.tags || [] : [])])]
 
   return <aside className="slib-inspector" aria-label={`Chi tiết SRC ${source.filename}`}>
@@ -102,7 +130,40 @@ export function SourceLibraryInspector({ project, source, onClose, onOpenWorkspa
     {previewError && <div className="slib-notice slib-notice--error" role="alert"><p>{previewError}</p><button type="button" className="slib-text-button" onClick={() => { void onRelink().catch((err) => setError(String(err))) }}>Liên kết lại tệp</button></div>}
     {error && <p role="alert" className="slib-notice slib-notice--error">{error}</p>}
     {notice && <p role="status" className="slib-notice">{notice}</p>}
-    {run?.stale && <p className="slib-notice slib-notice--warning">{run.fileChanged ? 'File gốc đã thay đổi hoặc không còn truy cập được.' : run.criteriaChanged ? 'Tiêu chí đã đổi: bỏ âm thanh và không trừ điểm do xoay 90°.' : 'Brief đã thay đổi.'} Cần phân tích lại để cập nhật điểm.</p>}
+    {run?.stale && (
+      <div className="slib-notice slib-notice--warning" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <p style={{ margin: 0 }}>
+          {run.fileChanged
+            ? 'File gốc đã thay đổi hoặc không còn truy cập được.'
+            : run.criteriaChanged
+            ? 'Tiêu chí đã đổi: bỏ âm thanh và không trừ điểm do xoay 90°.'
+            : 'Kịch bản / Brief đã thay đổi.'}{' '}
+          Cần cập nhật để khớp điểm mới.
+        </p>
+        {run.briefChanged && !run.fileChanged && (
+          <button
+            type="button"
+            className="slib-button slib-button--batch"
+            style={{ minHeight: 26, padding: '2px 8px', fontSize: 10, alignSelf: 'flex-start' }}
+            disabled={realigning}
+            onClick={() => void handleQuickRealign()}
+            title="Tự động đọc lại JSON bóc tách cũ và đối chiếu với kịch bản mới mà không tải lại video"
+          >
+            {realigning ? (
+              <>
+                <Loader2 size={12} className="animate-spin text-blue-600" />
+                <span>Đang đối chiếu JSON (~1s)...</span>
+              </>
+            ) : (
+              <>
+                <Zap size={11} className="text-amber-500 fill-amber-500" />
+                <span>Cập nhật kịch bản siêu tốc (~1s từ JSON)</span>
+              </>
+            )}
+          </button>
+        )}
+      </div>
+    )}
     {run?.review === 'REJECTED' && <p className="slib-notice slib-notice--warning">Bạn đã bác bỏ kết quả này. Điểm không được dùng để lọc clip.</p>}
 
     {!image && <>

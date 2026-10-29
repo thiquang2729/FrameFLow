@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC_CHANNELS } from '../shared/ipc-channels'
 import type { AiStatus, AiTestResult } from '../shared/types/ai'
-import type { AnalysisReview, SourceAnalysisEnvironment, SourceAnalysisOverview, SourceAnalysisRequest, SourceAnalysisRun, SourceMediaInfo } from '../shared/types/source-analysis'
+import type { AnalysisReview, AnalysisState, SourceAnalysisEnvironment, SourceAnalysisOverview, SourceAnalysisRequest, SourceAnalysisRun, SourceMediaInfo } from '../shared/types/source-analysis'
 import {
   CreateCommentDTO,
   CreateProjectDTO,

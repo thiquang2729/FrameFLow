@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Film, Folder, LayoutGrid, List, Search, Upload, X, MoreVertical, Plus, SlidersHorizontal, ChevronDown, Trash2, FileText } from 'lucide-react'
+import { Film, Folder, LayoutGrid, List, Search, Upload, X, MoreVertical, Plus, SlidersHorizontal, ChevronDown, Trash2, FileText, Sparkles, Loader2, AlertTriangle, Zap } from 'lucide-react'
 import { Project, SourceAsset } from '@shared/types'
 import { isSourceImage } from '@shared/media'
 import { useProjectStore } from '../stores/project.store'
@@ -7,6 +7,7 @@ import { localFileUrl, probeSource } from '../lib/source-media'
 import { SourceWorkspace } from '../components/source/SourceWorkspace'
 import { SourceLibraryInspector } from '../components/source/SourceLibraryInspector'
 import { ProjectScriptModal } from '../components/project/ProjectScriptModal'
+import { BatchSourceAnalysisModal, type BatchStatusReport } from '../components/source/BatchSourceAnalysisModal'
 import { issueLabels, mediaResolution, scoreTone, tagTone, usableAnalysis } from '../components/source/source-library-utils'
 import type { SourceAnalysisOverview } from '../../shared/types/source-analysis'
 import './source-library.css'
@@ -55,6 +56,9 @@ function ProjectSources({ project }: { project: Project }): React.ReactElement {
   const [shotFilter, setShotFilter] = useState('')
   const [durationFilter, setDurationFilter] = useState('')
   const [scriptModalOpen, setScriptModalOpen] = useState(false)
+  const [batchModalOpen, setBatchModalOpen] = useState(false)
+  const [batchTargetSources, setBatchTargetSources] = useState<SourceAsset[] | null>(null)
+  const [batchReport, setBatchReport] = useState<BatchStatusReport | null>(null)
   const lifetime = useRef<AbortController>(new AbortController())
   const importingRef = useRef(false)
   const removingRef = useRef(false)
@@ -63,7 +67,14 @@ function ProjectSources({ project }: { project: Project }): React.ReactElement {
   const [marquee, setMarquee] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
   const selectedId = selection.size === 1 ? [...selection][0] : null
   const workspace = sources.find((asset) => asset.id === workspaceId)
+  const videoCount = sources.filter((asset) => !isSourceImage(asset.filename)).length
   const analysisMap = new Map(analyses.map((item) => [item.sourceAssetId, item]))
+  const scriptUpdateTargets = sources.filter((asset) => {
+    if (isSourceImage(asset.filename)) return false
+    const a = analysisMap.get(asset.id)
+    return a?.latestState === 'COMPLETED' && Boolean(a?.stale) && Boolean(a?.briefChanged) && !a?.fileChanged
+  })
+  const scriptUpdateCount = scriptUpdateTargets.length
   const availableTags = [...new Set(analyses.filter(usableAnalysis).flatMap((item) => item.tags))].sort((a, b) => a.localeCompare(b, 'vi'))
   const availableShots = [...new Set(analyses.filter(usableAnalysis).flatMap((item) => item.shotTypes))].sort((a, b) => a.localeCompare(b, 'vi'))
   const refreshAnalysis = useCallback(async () => {
@@ -387,6 +398,52 @@ function ProjectSources({ project }: { project: Project }): React.ReactElement {
     <div className="slib-page" ref={root}>
       <header className="slib-header"><div><h1>Thư viện SRC</h1><div className="slib-project-meta"><Folder size={14} aria-hidden="true" /><span>{project.name}</span><span>·</span><span>{sources.length} tệp</span><span>·</span><span>{sizeLabel(sources.reduce((sum, asset) => sum + (asset.fileSize || 0), 0))}</span>{lastImported && <><span>·</span><span>Cập nhật {new Date(lastImported).toLocaleDateString('vi-VN')}</span></>}</div></div>
         <div className="slib-import-actions">
+          {scriptUpdateCount > 0 && (
+            <button
+              type="button"
+              className="slib-button slib-button--realign"
+              disabled={loading || importing || batchReport?.status === 'running'}
+              onClick={() => {
+                setBatchTargetSources(scriptUpdateTargets)
+                setBatchModalOpen(true)
+              }}
+              title={`Cập nhật đối chiếu kịch bản mới cho ${scriptUpdateCount} video chưa được cập nhật (siêu tốc ~1s/video từ JSON)`}
+            >
+              <Zap size={14} className="text-amber-500 fill-amber-500" aria-hidden="true" />
+              <span>Cập nhật kịch bản</span>
+              <span className="slib-count-badge slib-count-badge--amber">{scriptUpdateCount}</span>
+            </button>
+          )}
+          <button
+            type="button"
+            className="slib-button slib-button--batch"
+            disabled={loading || importing || videoCount === 0}
+            onClick={() => {
+              if (batchReport?.status === 'idle' || batchReport?.status === 'completed') {
+                setBatchTargetSources(null)
+              }
+              setBatchModalOpen(true)
+            }}
+            title="Tự động phân tích và chấm điểm toàn bộ video trong thư viện bằng AI"
+          >
+            {batchReport?.status === 'running' ? (
+              <>
+                <Loader2 size={15} className="animate-spin text-blue-600" aria-hidden="true" />
+                <span>Đang đánh giá ({batchReport.completedCount}/{batchReport.total})</span>
+              </>
+            ) : batchReport?.status === 'cancelled' && batchReport.remainingCount > 0 ? (
+              <>
+                <Sparkles size={15} className="text-amber-500" aria-hidden="true" />
+                <span>Tiếp tục đánh giá ({batchReport.completedCount}/{batchReport.total})</span>
+              </>
+            ) : (
+              <>
+                <Sparkles size={15} className="text-amber-500" aria-hidden="true" />
+                <span>Đánh giá toàn bộ video</span>
+                {videoCount > 0 && <span className="slib-count-badge">{videoCount}</span>}
+              </>
+            )}
+          </button>
           <button type="button" className="slib-button" onClick={() => setScriptModalOpen(true)}>
             <FileText size={15} aria-hidden="true" />
             <span>Kịch bản & Brief</span>
@@ -406,7 +463,106 @@ function ProjectSources({ project }: { project: Project }): React.ReactElement {
       <div className="slib-content">
         <main className="slib-browser" ref={browserRef} onMouseDown={handleBrowserMouseDown} aria-label="Danh sách tư liệu SRC">
           {marquee && <div className="slib-marquee" style={{ left: marquee.left, top: marquee.top, width: marquee.width, height: marquee.height }} />}
-          <div className="slib-toolbar"><label className="slib-search"><Search size={17} aria-hidden="true" /><input aria-label="Tìm tư liệu" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm clip nguồn, nội dung hoặc thẻ..." /></label>{selection.size > 1 && <button type="button" className="slib-button slib-button--danger" disabled={Boolean(removingIds.size) || importing} onClick={() => void removeSelected(selection)}><Trash2 size={14} aria-hidden="true" />{removingIds.size ? `Đang xóa ${removingIds.size}...` : `Xóa ${selection.size} mục`}</button>}<button type="button" className="slib-button slib-filter-toggle" aria-expanded={filtersOpen} aria-controls="slib-filters" onClick={() => setFiltersOpen((value) => !value)}><SlidersHorizontal size={15} aria-hidden="true" />Bộ lọc{activeFilters.length > 0 && <span>{activeFilters.length}</span>}</button><div className="slib-view-switch" aria-label="Kiểu hiển thị"><button type="button" aria-label="Dạng lưới" aria-pressed={view === 'grid'} onClick={() => setView('grid')}><LayoutGrid size={16} aria-hidden="true" /></button><button type="button" aria-label="Dạng danh sách" aria-pressed={view === 'list'} onClick={() => setView('list')}><List size={17} aria-hidden="true" /></button></div><select aria-label="Sắp xếp tư liệu" className="slib-sort" value={sort} onChange={(event) => setSort(event.target.value)}><option value="recent">Mới nhập</option><option value="name">Tên tệp</option><option value="size">Dung lượng</option><option value="technical">Điểm kỹ thuật</option><option value="editorial">Điểm biên tập</option></select></div>
+          {/* Background running or paused banner */}
+          {batchReport && batchReport.status === 'running' && !batchModalOpen && (
+            <div className="slib-batch-banner" role="status">
+              <div className="slib-batch-banner__info">
+                <Loader2 size={16} className="animate-spin text-blue-600 shrink-0" />
+                <div>
+                  <span className="font-semibold text-blue-950">
+                    Đang đánh giá AI ngầm: Clip {batchReport.current + 1} / {batchReport.total} ({batchReport.percent}%)
+                  </span>
+                  <span className="slib-batch-banner__counts ml-2">
+                    (Đã xong: {batchReport.completedCount}, Lỗi: {batchReport.failedCount})
+                  </span>
+                </div>
+              </div>
+              <div className="slib-batch-banner__actions">
+                <button
+                  type="button"
+                  className="slib-button slib-button--primary"
+                  onClick={() => setBatchModalOpen(true)}
+                >
+                  Mở chi tiết
+                </button>
+              </div>
+            </div>
+          )}
+          {batchReport && batchReport.status === 'cancelled' && batchReport.remainingCount > 0 && !batchModalOpen && (
+            <div className="slib-batch-banner" style={{ background: '#fffbeb', borderColor: '#fde68a', color: '#92400e' }} role="status">
+              <div className="slib-batch-banner__info">
+                <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+                <div>
+                  <span className="font-semibold text-amber-950">
+                    Đánh giá AI đang tạm dừng ({batchReport.completedCount}/{batchReport.total} video đã xong, còn {batchReport.remainingCount} video)
+                  </span>
+                </div>
+              </div>
+              <div className="slib-batch-banner__actions">
+                <button
+                  type="button"
+                  className="slib-button slib-button--primary"
+                  onClick={() => setBatchModalOpen(true)}
+                >
+                  Tiếp tục phân tích
+                </button>
+              </div>
+            </div>
+          )}
+          {/* Banner for pending script updates */}
+          {scriptUpdateCount > 0 && !batchModalOpen && batchReport?.status !== 'running' && (
+            <div className="slib-batch-banner slib-batch-banner--realign" role="status">
+              <div className="slib-batch-banner__info">
+                <Zap size={17} className="text-amber-600 fill-amber-500 shrink-0" />
+                <div>
+                  <span className="font-semibold text-amber-950">
+                    Kịch bản dự án đã thay đổi: Có {scriptUpdateCount} video chưa được cập nhật điểm kịch bản mới.
+                  </span>
+                  <span className="text-amber-800 text-[11px] block mt-0.5">
+                    Hệ thống sẽ đối chiếu siêu tốc từ file JSON có sẵn (chỉ ~1–2s/video, giữ nguyên toàn bộ điểm kỹ thuật).
+                  </span>
+                </div>
+              </div>
+              <div className="slib-batch-banner__actions">
+                <button
+                  type="button"
+                  className="slib-button slib-button--primary"
+                  style={{ background: '#d97706', borderColor: '#b45309', color: '#fff' }}
+                  onClick={() => {
+                    setBatchTargetSources(scriptUpdateTargets)
+                    setBatchModalOpen(true)
+                  }}
+                >
+                  <Zap size={13} className="fill-white" />
+                  <span>Cập nhật kịch bản ({scriptUpdateCount} video)</span>
+                </button>
+              </div>
+            </div>
+          )}
+          <div className="slib-toolbar">
+            <label className="slib-search"><Search size={17} aria-hidden="true" /><input aria-label="Tìm tư liệu" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm clip nguồn, nội dung hoặc thẻ..." /></label>
+            {selection.size > 1 && (
+              <div style={{ display: 'inline-flex', gap: 6 }}>
+                <button
+                  type="button"
+                  className="slib-button slib-button--batch"
+                  disabled={Boolean(removingIds.size) || importing}
+                  onClick={() => {
+                    const selectedVideos = sources.filter((s) => selection.has(s.id) && !isSourceImage(s.filename))
+                    if (selectedVideos.length > 0) {
+                      setBatchTargetSources(selectedVideos)
+                      setBatchModalOpen(true)
+                    } else {
+                      setError('Các mục đã chọn đều là ảnh tĩnh, không có video để phân tích.')
+                    }
+                  }}
+                >
+                  <Sparkles size={14} className="text-amber-500" aria-hidden="true" />
+                  <span>Đánh giá {selection.size} mục đã chọn</span>
+                </button>
+                <button type="button" className="slib-button slib-button--danger" disabled={Boolean(removingIds.size) || importing} onClick={() => void removeSelected(selection)}><Trash2 size={14} aria-hidden="true" />{removingIds.size ? `Đang xóa ${removingIds.size}...` : `Xóa ${selection.size} mục`}</button>
+              </div>
+            )}<button type="button" className="slib-button slib-filter-toggle" aria-expanded={filtersOpen} aria-controls="slib-filters" onClick={() => setFiltersOpen((value) => !value)}><SlidersHorizontal size={15} aria-hidden="true" />Bộ lọc{activeFilters.length > 0 && <span>{activeFilters.length}</span>}</button><div className="slib-view-switch" aria-label="Kiểu hiển thị"><button type="button" aria-label="Dạng lưới" aria-pressed={view === 'grid'} onClick={() => setView('grid')}><LayoutGrid size={16} aria-hidden="true" /></button><button type="button" aria-label="Dạng danh sách" aria-pressed={view === 'list'} onClick={() => setView('list')}><List size={17} aria-hidden="true" /></button></div><select aria-label="Sắp xếp tư liệu" className="slib-sort" value={sort} onChange={(event) => setSort(event.target.value)}><option value="recent">Mới nhập</option><option value="name">Tên tệp</option><option value="size">Dung lượng</option><option value="technical">Điểm kỹ thuật</option><option value="editorial">Điểm biên tập</option></select></div>
           {filtersOpen && <div id="slib-filters" className="slib-filter-panel"><label>Kỹ thuật tối thiểu<select value={technicalMin} onChange={(event) => setTechnicalMin(event.target.value)}><option value="">Tất cả</option>{[6, 7, 8, 9].map((value) => <option key={value} value={value}>≥ {value}</option>)}</select></label><label>Biên tập tối thiểu<select value={editorialMin} onChange={(event) => setEditorialMin(event.target.value)}><option value="">Tất cả</option>{[6, 7, 8, 9].map((value) => <option key={value} value={value}>≥ {value}</option>)}</select></label><label>Loại cảnh<select value={shotFilter} onChange={(event) => setShotFilter(event.target.value)}><option value="">Tất cả</option>{availableShots.map((shot) => <option key={shot} value={shot}>{shot}</option>)}</select></label><label>Thẻ<select value={tagFilter} onChange={(event) => setTagFilter(event.target.value)}><option value="">Tất cả</option>{availableTags.map((tag) => <option key={tag} value={tag}>{tag}</option>)}</select></label><label>Vấn đề<select value={issueFilter} onChange={(event) => setIssueFilter(event.target.value)}><option value="">Tất cả</option><option value="any">Có vấn đề</option>{Object.entries(issueLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Thời lượng<select value={durationFilter} onChange={(event) => setDurationFilter(event.target.value)}><option value="">Tất cả</option><option value="short">≤ 10 giây</option><option value="medium">10–30 giây</option><option value="long">&gt; 30 giây</option></select></label></div>}
           <div className="slib-filter-strip"><div className="slib-active-filters">{activeFilters.map((filter) => <button type="button" key={filter.key} onClick={filter.clear}>{filter.label}<X size={12} aria-hidden="true" /><span className="sr-only">Bỏ bộ lọc</span></button>)}{activeFilters.length ? <button type="button" className="slib-clear-filters" onClick={clearFilters}>Xóa tất cả</button> : <><button type="button" className="slib-suggested-filter" onClick={() => setTechnicalMin('8')}>Kỹ thuật ≥ 8</button><button type="button" className="slib-suggested-filter" onClick={() => setEditorialMin('8')}>Biên tập ≥ 8</button></>}</div><span className="slib-visible-count" role="status">{visible.length} {sources.some((item) => isSourceImage(item.filename)) ? 'tệp' : 'clip'}</span></div>
           {loading ? <p role="status" className="slib-empty">Đang tải thư viện...</p> : !visible.length ? <div className="slib-empty"><Folder size={32} aria-hidden="true" /><p>{sources.length ? 'Không có tư liệu phù hợp.' : 'Chưa có tư liệu. Nhập tệp hoặc thư mục để bắt đầu.'}</p>{sources.length ? <button type="button" className="slib-button" onClick={() => { clearFilters(); setSearch('') }}>Xóa bộ lọc</button> : <button type="button" className="slib-button" onClick={() => { void importSources(false) }}>Nhập tư liệu</button>}</div> : <div className={`slib-assets slib-assets--${view}`}>
@@ -459,6 +615,25 @@ function ProjectSources({ project }: { project: Project }): React.ReactElement {
         onClose={() => setScriptModalOpen(false)}
         project={project}
         onSaved={async () => { await refreshAnalysis() }}
+      />
+      <BatchSourceAnalysisModal
+        isOpen={batchModalOpen}
+        onClose={() => {
+          setBatchModalOpen(false)
+        }}
+        onMinimize={() => {
+          setBatchModalOpen(false)
+        }}
+        project={project}
+        sources={batchTargetSources || sources}
+        analyses={analyses}
+        onStepComplete={async () => {
+          await refreshAnalysis()
+        }}
+        onBatchFinished={async () => {
+          await refreshAnalysis()
+        }}
+        onProgressChange={setBatchReport}
       />
     </div>
   )

@@ -5,9 +5,9 @@ import type { ProjectService } from './project.service'
 import type { AiService } from './ai.service'
 import type { SourceMediaService } from './source-media.service'
 import type { DatabaseManager } from '../database/db'
-import type { AnalysisReview, SourceAnalysisEnvironment, SourceAnalysisOverview, SourceAnalysisRequest, SourceAnalysisRun, SourceMediaInfo } from '../../shared/types/source-analysis'
+import type { AnalysisReview, AnalysisState, SourceAnalysisEnvironment, SourceAnalysisOverview, SourceAnalysisRequest, SourceAnalysisRun, SourceAnalysisSegment, SourceMediaInfo } from '../../shared/types/source-analysis'
 import { validateSourceAnalysis } from '../../shared/validation/source-analysis'
-import { sourceVideoPrompt, VIDEO_MAX_BYTES, VIDEO_MAX_DURATION, VIDEO_PROMPT_VERSION } from './ai-video-adapter'
+import { sourceVideoPrompt, sourceScriptRealignPrompt, type RealignInputData, VIDEO_MAX_BYTES, VIDEO_MAX_DURATION, VIDEO_PROMPT_VERSION } from './ai-video-adapter'
 import { SOURCE_EXTENSIONS, isSourceImage } from '../../shared/media'
 import { SourceSidecarService } from './source-sidecar.service'
 
@@ -197,9 +197,18 @@ export class SourceAnalysisService {
     const result: SourceAnalysisOverview[] = []
     for (const row of rows) {
       let stale = false
+      let fileChanged = false
+      let briefChanged = false
       if (row.id) {
-        try { stale = await this.media.fingerprint(row.original_path) !== row.file_fingerprint || row.brief !== this.brief(project) || row.prompt_version !== VIDEO_PROMPT_VERSION }
-        catch { stale = true }
+        try {
+          const currentFp = await this.media.fingerprint(row.original_path)
+          fileChanged = currentFp !== row.file_fingerprint
+          briefChanged = row.brief !== this.brief(project)
+          stale = fileChanged || briefChanged || row.prompt_version !== VIDEO_PROMPT_VERSION
+        } catch {
+          stale = true
+          fileChanged = true
+        }
       }
       const segments = row.id ? db.query<Row>('SELECT start_time, end_time, shot_type, recommended_use, scores_json FROM source_segments WHERE analysis_run_id = ? ORDER BY start_time LIMIT 60', [row.id]) : []
       const first = segments[0]
@@ -213,7 +222,7 @@ export class SourceAnalysisService {
         recommendedUses: [...new Set<string>(segments.map((item) => item.recommended_use).filter(Boolean))],
         issueTypes: row.id ? db.query<{ type: string }>("SELECT DISTINCT type FROM source_issues WHERE analysis_run_id = ? AND type <> 'AUDIO'", [row.id]).map((issue) => issue.type) : [],
         dialogueCount,
-        stale, rejected: row.review === 'REJECTED' })
+        stale, fileChanged, briefChanged, rejected: row.review === 'REJECTED' })
     }
     return result
   }
@@ -254,6 +263,36 @@ export class SourceAnalysisService {
     try {
       const info = await this.media.probe(file, signal)
       if (info.fingerprint !== fingerprint) throw new Error('File SRC đã thay đổi trước khi phân tích. Hãy chạy lại.')
+
+      // Check if we can perform lightning-fast Re-align from existing JSON analysis
+      const previousRun = !request.forceFullVideo
+        ? db.get<Row>(
+            `SELECT r.id, r.brief, r.prompt_version, r.summary, r.file_fingerprint, r.start_time, r.end_time, r.media_method, r.media_note, r.audio_observed
+             FROM source_analysis_runs r
+             WHERE r.project_id = ? AND r.source_asset_id = ? AND r.state = 'COMPLETED' AND r.file_fingerprint = ?
+             ORDER BY r.created_at DESC, r.id DESC LIMIT 1`,
+            [request.projectId, request.sourceAssetId, fingerprint]
+          )
+        : null
+
+      const canRealign =
+        previousRun != null &&
+        previousRun.brief !== brief &&
+        previousRun.prompt_version === VIDEO_PROMPT_VERSION &&
+        Math.abs((previousRun.start_time || 0) - request.startTime) < 0.1 &&
+        Math.abs((previousRun.end_time || 0) - request.endTime) < 0.1
+
+      if (canRealign) {
+        const prevSegments = db.query<Row>(
+          'SELECT * FROM source_segments WHERE analysis_run_id = ? ORDER BY start_time',
+          [previousRun.id]
+        )
+        if (prevSegments.length > 0) {
+          await this.performRealign(request, id, fingerprint, brief, previousRun, prevSegments, file, info, db, signal)
+          return
+        }
+      }
+
       const cache = path.dirname(directory)
       await fs.mkdir(cache, { recursive: true })
       const projectRoot = await fs.realpath(projectPath)
@@ -303,6 +342,177 @@ export class SourceAnalysisService {
     } finally {
       if (ownsDirectory) await fs.rm(directory, { recursive: true, force: true }).catch(() => {})
     }
+  }
+
+  private async performRealign(
+    request: SourceAnalysisRequest,
+    id: string,
+    fingerprint: string,
+    brief: string,
+    previousRun: Row,
+    prevSegments: Row[],
+    file: string,
+    info: SourceMediaInfo,
+    db: DatabaseManager,
+    signal: AbortSignal
+  ): Promise<void> {
+    const prevDialogues = db.query<Row>(
+      'SELECT * FROM source_dialogues WHERE analysis_run_id = ? ORDER BY start_time',
+      [previousRun.id]
+    )
+    const prevTags = db.query<{ tag: string }>(
+      "SELECT tag FROM source_tags WHERE analysis_run_id = ? AND source = 'AI' ORDER BY tag",
+      [previousRun.id]
+    ).map((t) => t.tag)
+    const prevIssues = db.query<Row>(
+      'SELECT * FROM source_issues WHERE analysis_run_id = ? ORDER BY start_time',
+      [previousRun.id]
+    )
+
+    const existingData: RealignInputData = {
+      summary: previousRun.summary || '',
+      dialogue: prevDialogues.map((d) => ({
+        startTime: d.start_time,
+        endTime: d.end_time,
+        speaker: d.speaker || undefined,
+        text: d.text
+      })),
+      segments: prevSegments.map((s) => {
+        let scores: any = {}
+        try { scores = JSON.parse(s.scores_json) } catch {}
+        return {
+          startTime: s.start_time,
+          endTime: s.end_time,
+          shotType: s.shot_type,
+          summary: s.summary,
+          technicalScore: scores?.technical ?? null
+        }
+      }),
+      tags: prevTags
+    }
+
+    const duration = request.endTime - request.startTime
+    const prompt = sourceScriptRealignPrompt(duration, brief, existingData)
+    const mediaNote = 'Đối chiếu kịch bản từ JSON phân tích trước đó (siêu tốc, không tải lại video)'
+    db.run("UPDATE source_analysis_runs SET media_method = 'realigned-from-json', media_note = ? WHERE id = ?", [mediaNote, id])
+
+    const response = await this.ai.generateJson(request.model, prompt, signal)
+    signal.throwIfAborted()
+
+    let json: any
+    try {
+      json = JSON.parse(response.text)
+    } catch {
+      throw new Error('AI không trả JSON hợp lệ khi đối chiếu kịch bản.')
+    }
+
+    const realignedSegments: Array<{ index: number; editorial?: number | null; rationale?: string; recommendedUse?: string }> =
+      Array.isArray(json?.segments) ? json.segments : []
+    const realignedMap = new Map<number, { editorial?: number | null; rationale?: string; recommendedUse?: string }>()
+    for (const item of realignedSegments) {
+      if (typeof item?.index === 'number') realignedMap.set(item.index, item)
+    }
+
+    const newTags: string[] = Array.isArray(json?.tags)
+      ? [...new Set([...prevTags, ...json.tags.filter((t: any) => typeof t === 'string' && t.trim())])]
+      : prevTags
+    const newSummary = typeof json?.summary === 'string' && json.summary.trim() ? json.summary.trim() : previousRun.summary || ''
+
+    if (!await this.projects.getProject(request.projectId) || !db.get('SELECT id FROM source_assets WHERE project_id = ? AND id = ?', [request.projectId, request.sourceAssetId])) {
+      throw new Error('Dự án hoặc SRC không còn tồn tại.')
+    }
+    signal.throwIfAborted()
+
+    const finalSegments: SourceAnalysisSegment[] = []
+
+    db.transaction(() => {
+      prevSegments.forEach((seg, idx) => {
+        const segId = ulid()
+        let scores: Record<string, any> = {}
+        try { scores = JSON.parse(seg.scores_json) } catch {}
+
+        const realigned = realignedMap.get(idx)
+        if (realigned) {
+          if (typeof realigned.editorial === 'number' && Number.isFinite(realigned.editorial)) {
+            scores.editorial = Math.max(0, Math.min(10, Math.round(realigned.editorial * 10) / 10))
+          }
+          if (typeof realigned.rationale === 'string' && realigned.rationale.trim()) {
+            scores.rationale = realigned.rationale.trim()
+          }
+        }
+        const recommendedUse = realigned?.recommendedUse && typeof realigned.recommendedUse === 'string'
+          ? realigned.recommendedUse.trim()
+          : seg.recommended_use || ''
+
+        const finalScore = {
+          technical: scores?.technical ?? null,
+          editorial: scores?.editorial ?? null,
+          sharpness: scores?.sharpness ?? null,
+          stability: scores?.stability ?? null,
+          exposure: scores?.exposure ?? null,
+          composition: scores?.composition ?? null,
+          audio: scores?.audio ?? null,
+          rationale: scores?.rationale || ''
+        }
+
+        finalSegments.push({
+          id: segId,
+          startTime: seg.start_time,
+          endTime: seg.end_time,
+          summary: seg.summary || '',
+          shotType: seg.shot_type || '',
+          recommendedUse,
+          scores: finalScore
+        })
+
+        db.run(
+          'INSERT INTO source_segments (id, analysis_run_id, start_time, end_time, summary, shot_type, recommended_use, scores_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [segId, id, seg.start_time, seg.end_time, seg.summary, seg.shot_type, recommendedUse, JSON.stringify(finalScore)]
+        )
+      })
+
+      for (const issue of prevIssues) {
+        db.run(
+          'INSERT INTO source_issues (id, analysis_run_id, start_time, end_time, type, severity, description, evidence) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [ulid(), id, issue.start_time, issue.end_time, issue.type, issue.severity, issue.description, issue.evidence]
+        )
+      }
+
+      for (const tag of newTags) {
+        db.run(
+          "INSERT INTO source_tags (id, source_asset_id, analysis_run_id, tag, source) VALUES (?, ?, ?, ?, 'AI')",
+          [ulid(), request.sourceAssetId, id, tag]
+        )
+      }
+
+      for (const line of prevDialogues) {
+        db.run(
+          'INSERT INTO source_dialogues (id, analysis_run_id, source_asset_id, start_time, end_time, speaker, text) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [ulid(), id, request.sourceAssetId, line.start_time, line.end_time, line.speaker || null, line.text]
+        )
+      }
+
+      db.run(
+        "UPDATE source_analysis_runs SET state = 'COMPLETED', summary = ?, audio_observed = ?, returned_model = ?, completed_at = ? WHERE id = ?",
+        [newSummary, previousRun.audio_observed ? 1 : 0, response.returnedModel, new Date().toISOString(), id]
+      )
+    })
+
+    await this.sidecar.mergeAndSave(file, {
+      fingerprint,
+      duration: info.duration,
+      width: info.width,
+      height: info.height,
+      fps: info.fps,
+      fileSize: info.fileSize,
+      startTime: request.startTime,
+      endTime: request.endTime,
+      summary: newSummary,
+      dialogue: prevDialogues.map((d) => ({ startTime: d.start_time, endTime: d.end_time, speaker: d.speaker || undefined, text: d.text })),
+      segments: finalSegments,
+      issues: prevIssues.map((issue) => ({ startTime: issue.start_time, endTime: issue.end_time, type: issue.type, severity: issue.severity, description: issue.description, evidence: issue.evidence })),
+      tags: newTags
+    }).catch(() => {})
   }
 
   async cancel(projectId: string, sourceId: string, runId: string): Promise<void> {

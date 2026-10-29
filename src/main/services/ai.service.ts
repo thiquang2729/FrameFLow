@@ -304,6 +304,39 @@ export class AiService {
     }
   }
 
+  async generateJson(model: string, prompt: string, signal: AbortSignal): Promise<{ text: string; returnedModel: string | null }> {
+    if (this.videoController) throw new Error('Đang có một yêu cầu AI khác. Hãy chờ hoặc hủy tác vụ.')
+    if (this.status.state !== 'ready' || !this.getStatus().accounts) throw new Error('Hãy kết nối và đăng nhập Antigravity trước.')
+    if (!(await this.listVideoModelCandidates()).includes(model)) throw new Error('Model không có trong danh sách Gemini của proxy.')
+    if (signal.aborted) throw new Error('Đã hủy phân tích.')
+    const controller = new AbortController()
+    this.videoController = controller
+    const abort = () => controller.abort()
+    signal.addEventListener('abort', abort, { once: true })
+    const timer = setTimeout(abort, 60000)
+    try {
+      const response = await this.request(`/models/${encodeURIComponent(model)}:generateContent`, {
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 6000, temperature: 0.1 }
+      }, 60000, controller.signal, true)
+      const candidate = response.candidates?.[0]
+      if (candidate?.finishReason !== 'STOP') throw new Error('Phản hồi từ AI bị chặn hoặc chưa hoàn tất.')
+      const parts = candidate.content?.parts
+      if (!Array.isArray(parts)) throw new Error('Tuyến AI không trả kết quả Gemini hợp lệ.')
+      const text = parts.filter((part: any) => typeof part?.text === 'string' && !part.thought).map((part: any) => part.text).join('')
+      if (!text.trim()) throw new Error('AI không trả kết quả đối chiếu kịch bản.')
+      return { text, returnedModel: typeof response.modelVersion === 'string' ? response.modelVersion.slice(0, 200) : null }
+    } catch (error) {
+      if (controller.signal.aborted) throw new Error(signal.aborted ? 'Đã hủy phân tích.' : 'Đối chiếu kịch bản quá thời gian 60 giây.')
+      if (error instanceof TypeError) throw new Error('Mất kết nối tới CLIProxyAPI khi gửi yêu cầu.')
+      throw error
+    } finally {
+      clearTimeout(timer)
+      signal.removeEventListener('abort', abort)
+      this.videoController = null
+    }
+  }
+
   async testPrompt(model: string, prompt: string): Promise<AiTestResult> {
     if (this.testController) throw new Error('Đang có một yêu cầu AI. Hãy chờ hoặc hủy yêu cầu.')
     if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 8000) throw new Error('Nhập câu hỏi từ 1 đến 8.000 ký tự.')

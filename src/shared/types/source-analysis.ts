@@ -54,7 +54,7 @@ export interface SourceAnalysisRun {
   endTime: number
   summary: string
   audioObserved: boolean
-  mediaMethod: 'original' | 'transcoded'
+  mediaMethod: 'original' | 'transcoded' | 'realigned-from-json'
   mediaNote: string
   review: AnalysisReview
   userNote: string
@@ -78,6 +78,7 @@ export interface SourceAnalysisRequest {
   startTime: number
   endTime: number
   consent: boolean
+  forceFullVideo?: boolean
 }
 
 export interface SourceMediaInfo {
@@ -118,6 +119,8 @@ export interface SourceAnalysisOverview {
   issueTypes: string[]
   dialogueCount: number
   stale: boolean
+  fileChanged?: boolean
+  briefChanged?: boolean
   rejected: boolean
 }
 
